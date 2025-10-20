@@ -1,0 +1,1781 @@
+"""💰 GESTOR DE GASTOS PERSONAL v2.0 — POTENCIADO
+Aplicación completa con cotización en tiempo real, ahorros, UX moderna y más.
+Autor: Maximiliano Burgos
+"""
+
+import tkinter as tk
+from tkinter import ttk, messagebox, filedialog
+import sqlite3
+import datetime
+from datetime import datetime as dt, timedelta
+import json
+import os
+import urllib.request
+import matplotlib
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
+from pathlib import Path
+
+# === CONFIGURACIÓN DE RUTAS ===
+RUTA_BASE = Path(__file__).parent
+RUTA_DATA = RUTA_BASE / "data"
+RUTA_DB = RUTA_DATA / "gastos.db"
+RUTA_BACKUPS = RUTA_DATA / "backups"
+RUTA_EXPORTS = RUTA_BASE / "recursos" / "exports"
+RUTA_TICKETS = RUTA_BASE / "recursos" / "tickets"
+
+for ruta in [RUTA_DATA, RUTA_BACKUPS, RUTA_EXPORTS, RUTA_TICKETS]:
+    ruta.mkdir(parents=True, exist_ok=True)
+
+# === COLORES MODERNOS ===
+COLORES = {
+    'primary': '#4361ee',
+    'secondary': '#3f37c9',
+    'success': '#4cc9f0',
+    'danger': '#f72585',
+    'warning': '#ff9e00',
+    'info': '#4895ef',
+    'light': '#f8f9fa',
+    'dark': '#212529',
+    'background': '#ffffff',
+    'text': '#333333',
+    'card_bg': '#fafafa',
+    'border': '#e0e0e0'
+}
+
+# === CATEGORÍAS Y CUENTAS ===
+CATEGORIAS_DEFAULT = [
+    ('🍕 Comida', '#ff6b6b'),
+    ('🚗 Transporte', '#4ecdc4'),
+    ('🏠 Hogar', '#45b7d1'),
+    ('🛒 Super', '#96ceb4'),
+    ('💊 Salud', '#ff8c94'),
+    ('🎮 Entretenimiento', '#dfe6e9'),
+    ('👕 Ropa', '#a29bfe'),
+    ('📱 Tecnología', '#6c5ce7'),
+    ('💇 Personal', '#fd79a8'),
+    ('🎓 Educación', '#fdcb6e'),
+    ('❓ Otros', '#95a5a6')
+]
+
+CUENTAS_DEFAULT = [
+    '💵 Efectivo',
+    '💳 Débito',
+    '💳 Crédito',
+    '📱 MercadoPago',
+    '💰 Ahorro USD'
+]
+
+# === BASE DE DATOS ===
+class Database:
+    def __init__(self):
+        self.conn = sqlite3.connect(str(RUTA_DB))
+        self.crear_tablas()
+        self.inicializar_datos_default()
+
+    def crear_tablas(self):
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS gastos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fecha TEXT NOT NULL,
+                categoria TEXT NOT NULL,
+                monto REAL NOT NULL,
+                moneda TEXT DEFAULT 'ARS',
+                descripcion TEXT,
+                cuenta TEXT NOT NULL,
+                notas TEXT,
+                tarjeta_id INTEGER,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (tarjeta_id) REFERENCES tarjetas(id)
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS categorias (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT UNIQUE NOT NULL,
+                color TEXT NOT NULL,
+                presupuesto REAL DEFAULT 0
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS cuentas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT UNIQUE NOT NULL,
+                tipo TEXT DEFAULT 'ARS'
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS config (
+                clave TEXT PRIMARY KEY,
+                valor TEXT
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS sueldos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                mes TEXT UNIQUE NOT NULL,
+                monto REAL NOT NULL,
+                notas TEXT
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS cotizaciones (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fecha TEXT NOT NULL,
+                tipo TEXT NOT NULL,
+                compra REAL,
+                venta REAL
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS tarjetas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT UNIQUE NOT NULL,
+                banco TEXT,
+                limite REAL NOT NULL,
+                dia_cierre INTEGER NOT NULL,
+                dia_vencimiento INTEGER NOT NULL,
+                activa INTEGER DEFAULT 1,
+                notas TEXT
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ahorros (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fecha TEXT NOT NULL,
+                monto REAL NOT NULL,
+                moneda TEXT DEFAULT 'ARS',
+                nota TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        self.conn.commit()
+
+    def inicializar_datos_default(self):
+        cursor = self.conn.cursor()
+        for nombre, color in CATEGORIAS_DEFAULT:
+            cursor.execute('INSERT OR IGNORE INTO categorias (nombre, color) VALUES (?, ?)', (nombre, color))
+        for cuenta in CUENTAS_DEFAULT:
+            tipo = 'USD' if 'USD' in cuenta else 'ARS'
+            cursor.execute('INSERT OR IGNORE INTO cuentas (nombre, tipo) VALUES (?, ?)', (cuenta, tipo))
+        cursor.execute('INSERT OR IGNORE INTO config (clave, valor) VALUES (?, ?)', ('presupuesto_mensual', '80000'))
+        self.conn.commit()
+
+    def agregar_gasto(self, fecha, categoria, monto, moneda, descripcion, cuenta, notas='', tarjeta_id=None):
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT INTO gastos (fecha, categoria, monto, moneda, descripcion, cuenta, notas, tarjeta_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (fecha, categoria, monto, moneda, descripcion, cuenta, notas, tarjeta_id))
+        self.conn.commit()
+        return cursor.lastrowid
+
+    def obtener_gastos(self, mes=None):
+        cursor = self.conn.cursor()
+        query = 'SELECT * FROM gastos'
+        params = []
+        if mes:
+            query += ' WHERE strftime("%Y-%m", fecha) = ?'
+            params = [mes]
+        query += ' ORDER BY fecha DESC'
+        cursor.execute(query, params)
+        return cursor.fetchall()
+
+    def obtener_categorias(self):
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT * FROM categorias ORDER BY nombre')
+        return cursor.fetchall()
+
+    def agregar_categoria(self, nombre, color):
+        cursor = self.conn.cursor()
+        cursor.execute('INSERT INTO categorias (nombre, color) VALUES (?, ?)', (nombre, color))
+        self.conn.commit()
+
+    def eliminar_categoria(self, nombre):
+        cursor = self.conn.cursor()
+        cursor.execute('DELETE FROM categorias WHERE nombre = ?', (nombre,))
+        self.conn.commit()
+
+    def obtener_cuentas(self):
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT * FROM cuentas ORDER BY nombre')
+        return cursor.fetchall()
+
+    def guardar_sueldo_mes(self, mes, monto):
+        cursor = self.conn.cursor()
+        cursor.execute('INSERT OR REPLACE INTO sueldos (mes, monto) VALUES (?, ?)', (mes, monto))
+        self.conn.commit()
+
+    def obtener_sueldo_mes(self, mes):
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT * FROM sueldos WHERE mes=?', (mes,))
+        return cursor.fetchone()
+
+    def guardar_cotizacion(self, tipo, compra, venta):
+        cursor = self.conn.cursor()
+        fecha = datetime.date.today().isoformat()
+        cursor.execute('INSERT INTO cotizaciones (fecha, tipo, compra, venta) VALUES (?, ?, ?, ?)', (fecha, tipo, compra, venta))
+        self.conn.commit()
+
+    def obtener_ultima_cotizacion(self):
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT tipo, compra, venta FROM cotizaciones ORDER BY id DESC LIMIT 4')
+        return {row[0]: {'compra': row[1], 'venta': row[2]} for row in cursor.fetchall()}
+
+    def agregar_tarjeta(self, nombre, banco, limite, dia_cierre, dia_vencimiento):
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT INTO tarjetas (nombre, banco, limite, dia_cierre, dia_vencimiento)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (nombre, banco, limite, dia_cierre, dia_vencimiento))
+        self.conn.commit()
+        return cursor.lastrowid
+
+    def obtener_tarjetas(self):
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT * FROM tarjetas WHERE activa=1 ORDER BY nombre')
+        return cursor.fetchall()
+
+    def agregar_ahorro(self, fecha, monto, moneda, nota):
+        cursor = self.conn.cursor()
+        cursor.execute('INSERT INTO ahorros (fecha, monto, moneda, nota) VALUES (?, ?, ?, ?)', (fecha, monto, moneda, nota))
+        self.conn.commit()
+
+    def obtener_ahorros(self, mes=None):
+        cursor = self.conn.cursor()
+        query = 'SELECT * FROM ahorros'
+        params = []
+        if mes:
+            query += ' WHERE strftime("%Y-%m", fecha) = ?'
+            params = [mes]
+        query += ' ORDER BY fecha DESC'
+        cursor.execute(query, params)
+        return cursor.fetchall()
+
+    def cerrar(self):
+        self.conn.close()
+
+# === FUNCIÓN: COTIZACIÓN DEL DÓLAR ===
+def obtener_cotizacion_dolar():
+    try:
+        url = "https://www.dolarsi.com/api/api.php?type=valoresprincipales"
+        with urllib.request.urlopen(url, timeout=5) as response:
+            data = json.loads(response.read().decode())
+        cotizaciones = {}
+        for item in data:
+            casa = item.get('casa', {})
+            nombre = casa.get('nombre', '')
+            if 'Blue' in nombre:
+                cotizaciones['Blue'] = {
+                    'compra': float(casa.get('compra', '0').replace(',', '.')),
+                    'venta': float(casa.get('venta', '0').replace(',', '.'))
+                }
+            elif 'Oficial' in nombre:
+                cotizaciones['Oficial'] = {
+                    'compra': float(casa.get('compra', '0').replace(',', '.')),
+                    'venta': float(casa.get('venta', '0').replace(',', '.'))
+                }
+            elif 'Bolsa' in nombre:
+                cotizaciones['MEP'] = {
+                    'compra': float(casa.get('compra', '0').replace(',', '.')),
+                    'venta': float(casa.get('venta', '0').replace(',', '.'))
+                }
+            elif 'Contado con liqui' in nombre:
+                cotizaciones['CCL'] = {
+                    'compra': float(casa.get('compra', '0').replace(',', '.')),
+                    'venta': float(casa.get('venta', '0').replace(',', '.'))
+                }
+        return cotizaciones
+    except Exception as e:
+        print(f"Error al obtener cotización: {e}")
+        return None
+
+# === CLASE PRINCIPAL ===
+class GestorGastos:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("💰 Gestor de Gastos Personal v2.0")
+        self.root.geometry("1400x850")
+        self.root.configure(bg=COLORES['background'])
+        self.centrar_ventana()
+        self.db = Database()
+        self.mes_actual = datetime.date.today().strftime('%Y-%m')
+        self.cotizaciones = {}
+        self.categoria_seleccionada = None
+        self.crear_menu()
+        self.crear_header()
+        self.crear_botones_rapidos()
+        self.crear_contenido()
+        self.cargar_dashboard()
+        self.root.protocol("WM_DELETE_WINDOW", self.al_cerrar)
+
+    def centrar_ventana(self):
+        self.root.update_idletasks()
+        x = (self.root.winfo_screenwidth() // 2) - (1400 // 2)
+        y = (self.root.winfo_screenheight() // 2) - (850 // 2)
+        self.root.geometry(f'1400x850+{x}+{y}')
+
+    def crear_menu(self):
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
+        menu_archivo = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="📁 Archivo", menu=menu_archivo)
+        menu_archivo.add_command(label="Exportar a Excel", command=self.exportar_excel)
+        menu_archivo.add_command(label="Backup", command=self.hacer_backup)
+        menu_archivo.add_separator()
+        menu_archivo.add_command(label="Salir", command=self.al_cerrar)
+
+        menu_config = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label=⚙️ Configuración", menu=menu_config)
+        menu_config.add_command(label="Sueldo Mensual", command=self.ventana_sueldo)
+        menu_config.add_command(label="Gestionar Categorías", command=self.ventana_gestion_categorias)
+
+        menu_ayuda = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="❓ Ayuda", menu=menu_ayuda)
+        menu_ayuda.add_command(label="Acerca de", command=self.mostrar_acerca_de)
+
+    def crear_header(self):
+        frame_header = tk.Frame(self.root, bg=COLORES['primary'], height=80)
+        frame_header.pack(fill=tk.X, side=tk.TOP)
+        frame_header.pack_propagate(False)
+        tk.Label(
+            frame_header,
+            text="💰 Gestor de Gastos Personal v2.0",
+            font=('Segoe UI', 20, 'bold'),
+            bg=COLORES['primary'],
+            fg='white'
+        ).pack(side=tk.LEFT, padx=20, pady=20)
+
+        frame_dolar = tk.Frame(frame_header, bg=COLORES['primary'])
+        frame_dolar.pack(side=tk.RIGHT, padx=20)
+        self.btn_dolar = tk.Button(
+            frame_dolar,
+            text="💱 Actualizar Dólar",
+            command=self.actualizar_cotizacion_dolar,
+            bg='white',
+            fg=COLORES['primary'],
+            font=('Segoe UI', 10, 'bold'),
+            cursor='hand2',
+            relief=tk.FLAT,
+            padx=15,
+            pady=8
+        )
+        self.btn_dolar.pack()
+        self.lbl_ultima_actualizacion = tk.Label(
+            frame_dolar,
+            text="",
+            font=('Segoe UI', 8),
+            bg=COLORES['primary'],
+            fg='white'
+        )
+        self.lbl_ultima_actualizacion.pack(pady=(5, 0))
+
+    def crear_botones_rapidos(self):
+        frame_btns = tk.Frame(self.root, bg=COLORES['light'], height=50)
+        frame_btns.pack(fill=tk.X, side=tk.TOP, padx=10, pady=(0, 10))
+        frame_btns.pack_propagate(False)
+
+        botones = [
+            ("➕ Agregar Gasto", self.abrir_form_gasto_rapido),
+            ("📊 Dashboard", lambda: self.notebook.select(self.tab_dashboard)),
+            ("🐷 Ahorros", lambda: self.notebook.select(self.tab_ahorros)),
+            ("💵 Gastos USD", self.ver_gastos_usd)
+        ]
+        for texto, comando in botones:
+            btn = tk.Button(
+                frame_btns,
+                text=texto,
+                command=comando,
+                bg=COLORES['card_bg'],
+                fg=COLORES['text'],
+                font=('Segoe UI', 10, 'bold'),
+                relief=tk.FLAT,
+                cursor='hand2',
+                padx=15,
+                pady=10
+            )
+            btn.pack(side=tk.LEFT, padx=5)
+            btn.bind("<Enter>", lambda e, b=btn: b.config(bg=COLORES['primary'], fg='white'))
+            btn.bind("<Leave>", lambda e, b=btn: b.config(bg=COLORES['card_bg'], fg=COLORES['text']))
+
+    def crear_contenido(self):
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+        style = ttk.Style()
+        style.configure('TNotebook.Tab', font=('Segoe UI', 11), padding=[20, 10])
+
+        self.tab_dashboard = tk.Frame(self.notebook, bg=COLORES['background'])
+        self.tab_gastos = tk.Frame(self.notebook, bg=COLORES['background'])
+        self.tab_tarjetas = tk.Frame(self.notebook, bg=COLORES['background'])
+        self.tab_ahorros = tk.Frame(self.notebook, bg=COLORES['background'])
+
+        self.notebook.add(self.tab_dashboard, text="📊 Dashboard")
+        self.notebook.add(self.tab_gastos, text="💸 Gastos")
+        self.notebook.add(self.tab_tarjetas, text="💳 Tarjetas")
+        self.notebook.add(self.tab_ahorros, text="🐷 Ahorros")
+
+        self.crear_tab_dashboard()
+        self.crear_tab_gastos()
+        self.crear_tab_tarjetas()
+        self.crear_tab_ahorros()
+
+    # === DASHBOARD ===
+    def crear_tab_dashboard(self):
+        canvas = tk.Canvas(self.tab_dashboard, bg=COLORES['background'])
+        scrollbar = ttk.Scrollbar(self.tab_dashboard, orient="vertical", command=canvas.yview)
+        frame_scroll = tk.Frame(canvas, bg=COLORES['background'])
+        frame_scroll.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=frame_scroll, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        frame_mes = tk.Frame(frame_scroll, bg=COLORES['background'])
+        frame_mes.pack(fill=tk.X, padx=20, pady=10)
+        tk.Label(frame_mes, text="📅 Mes:", font=('Segoe UI', 12, 'bold'), bg=COLORES['background']).pack(side=tk.LEFT)
+        self.combo_mes_dash = ttk.Combobox(frame_mes, values=self.generar_meses(), state='readonly', width=15)
+        self.combo_mes_dash.set(self.mes_actual)
+        self.combo_mes_dash.pack(side=tk.LEFT, padx=10)
+        self.combo_mes_dash.bind('<<ComboboxSelected>>', lambda e: self.cargar_dashboard())
+        tk.Button(frame_mes, text="🔄 Actualizar", command=self.cargar_dashboard, bg=COLORES['primary'], fg='white').pack(side=tk.LEFT, padx=10)
+
+        self.frame_resumen = tk.Frame(frame_scroll, bg=COLORES['background'])
+        self.frame_resumen.pack(fill=tk.X, padx=20, pady=10)
+
+        self.frame_cotizaciones = tk.Frame(frame_scroll, bg=COLORES['light'])
+        self.frame_cotizaciones.pack(fill=tk.X, padx=20, pady=10)
+
+        self.frame_graficos = tk.Frame(frame_scroll, bg=COLORES['background'])
+        self.frame_graficos.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+
+        self.frame_ultimos = tk.Frame(frame_scroll, bg=COLORES['background'])
+        self.frame_ultimos.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+
+    def cargar_dashboard(self):
+        for w in self.frame_resumen.winfo_children(): w.destroy()
+        for w in self.frame_graficos.winfo_children(): w.destroy()
+        for w in self.frame_ultimos.winfo_children(): w.destroy()
+
+        mes = self.combo_mes_dash.get()
+        gastos = self.db.obtener_gastos(mes=mes)
+        ahorros = self.db.obtener_ahorros(mes=mes)
+        sueldo = self.db.obtener_sueldo_mes(mes)
+        sueldo_val = float(sueldo[2]) if sueldo else 0
+
+        total_gastado_ars = sum(g[3] for g in gastos if g[4] == 'ARS')
+        total_gastado_usd = sum(g[3] for g in gastos if g[4] == 'USD')
+        total_ahorrado_ars = sum(a[2] for a in ahorros if a[3] == 'ARS')
+        total_ahorrado_usd = sum(a[2] for a in ahorros if a[3] == 'USD')
+
+        disponible = sueldo_val - total_gastado_ars if sueldo_val > 0 else 0
+        porcentaje_gastado = (total_gastado_ars / sueldo_val * 100) if sueldo_val > 0 else 0
+
+        # Tarjetas de resumen
+        self.crear_tarjeta(self.frame_resumen, "💰 Sueldo", f"${sueldo_val:,.0f}", COLORES['info'], 0, 0)
+        self.crear_tarjeta(self.frame_resumen, "💸 Gastado ARS", f"${total_gastado_ars:,.0f}", COLORES['danger'], 0, 1)
+        self.crear_tarjeta(self.frame_resumen, "✅ Disponible", f"${disponible:,.0f}", COLORES['success'], 0, 2)
+        self.crear_tarjeta(self.frame_resumen, "📊 % Gastado", f"{porcentaje_gastado:.1f}%", 
+                          COLORES['warning'] if porcentaje_gastado > 80 else COLORES['primary'], 0, 3)
+        self.crear_tarjeta(self.frame_resumen, "🐷 Ahorrado ARS", f"${total_ahorrado_ars:,.0f}", COLORES['success'], 1, 0)
+        if total_gastado_usd > 0:
+            self.crear_tarjeta(self.frame_resumen, "💵 Gastado USD", f"USD ${total_gastado_usd:,.2f}", COLORES['secondary'], 1, 1)
+        if total_ahorrado_usd > 0:
+            self.crear_tarjeta(self.frame_resumen, "🐷 Ahorrado USD", f"USD ${total_ahorrado_usd:,.2f}", COLORES['secondary'], 1, 2)
+
+        # Gráficos
+        if gastos:
+            self.crear_graficos(gastos)
+        else:
+            tk.Label(self.frame_graficos, text="No hay gastos este mes", font=('Segoe UI', 14), bg=COLORES['background']).pack(pady=50)
+
+        self.mostrar_ultimos_gastos(gastos[:8])
+        self.cargar_cotizaciones_previas()
+
+    def crear_tarjeta(self, parent, titulo, valor, color, row, col):
+        frame = tk.Frame(parent, bg=color, relief=tk.RAISED, borderwidth=0, highlightthickness=1, highlightbackground=color)
+        frame.grid(row=row, column=col, padx=10, pady=10, sticky='nsew')
+        parent.grid_columnconfigure(col, weight=1)
+        tk.Label(frame, text=titulo, font=('Segoe UI', 10, 'bold'), bg=color, fg='white').pack(pady=(10, 5))
+        tk.Label(frame, text=valor, font=('Segoe UI', 16, 'bold'), bg=color, fg='white').pack(pady=(0, 10))
+
+    def crear_graficos(self, gastos):
+        gastos_ars = [g for g in gastos if g[4] == 'ARS']
+        if not gastos_ars: return
+        categorias = {}
+        for g in gastos_ars:
+            cat = g[2]
+            monto = g[3]
+            categorias[cat] = categorias.get(cat, 0) + monto
+
+        fig = Figure(figsize=(12, 4), facecolor=COLORES['background'])
+        ax1 = fig.add_subplot(121)
+        ax2 = fig.add_subplot(122)
+
+        labels = list(categorias.keys())
+        sizes = list(categorias.values())
+        cats_db = self.db.obtener_categorias()
+        colores_cats = {cat[1]: cat[2] for cat in cats_db}
+        colors = [colores_cats.get(label, '#95a5a6') for label in labels]
+
+        ax1.pie(sizes, labels=labels, autopct='%1.1f%%', colors=colors, startangle=90)
+        ax1.set_title('Gastos por Categoría', fontsize=12, fontweight='bold', color=COLORES['text'])
+
+        ax2.barh(labels, sizes, color=colors)
+        ax2.set_xlabel('Monto ($)', fontsize=10, color=COLORES['text'])
+        ax2.set_title('Montos por Categoría', fontsize=12, fontweight='bold', color=COLORES['text'])
+        ax2.tick_params(axis='y', labelsize=9, colors=COLORES['text'])
+        for i, v in enumerate(sizes):
+            ax2.text(v, i, f' ${v:,.0f}', va='center', fontsize=9, color=COLORES['text'])
+
+        fig.tight_layout()
+        canvas = FigureCanvasTkAgg(fig, self.frame_graficos)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+    def mostrar_ultimos_gastos(self, gastos):
+        tk.Label(self.frame_ultimos, text="📋 Últimos Gastos", font=('Segoe UI', 14, 'bold'), bg=COLORES['background']).pack(anchor='w', pady=(0, 10))
+        if not gastos:
+            tk.Label(self.frame_ultimos, text="No hay gastos recientes", font=('Segoe UI', 11), bg=COLORES['background']).pack(pady=20)
+            return
+
+        frame_tabla = tk.Frame(self.frame_ultimos, bg=COLORES['background'])
+        frame_tabla.pack(fill=tk.BOTH, expand=True)
+
+        headers = ['Fecha', 'Categoría', 'Descripción', 'Monto', 'Cuenta']
+        for i, header in enumerate(headers):
+            tk.Label(frame_tabla, text=header, font=('Segoe UI', 10, 'bold'), bg=COLORES['light'], relief=tk.RAISED, padx=10, pady=5).grid(row=0, column=i, sticky='ew')
+
+        for idx, gasto in enumerate(gastos, start=1):
+            id_gasto, fecha, categoria, monto, moneda, descripcion, cuenta = gasto[:7]
+            bg_color = COLORES['background'] if idx % 2 == 0 else COLORES['light']
+
+            tk.Label(frame_tabla, text=fecha, font=('Segoe UI', 9), bg=bg_color, anchor='w', padx=10, pady=5).grid(row=idx, column=0, sticky='ew')
+            tk.Label(frame_tabla, text=categoria, font=('Segoe UI', 9), bg=bg_color, anchor='w', padx=10, pady=5).grid(row=idx, column=1, sticky='ew')
+
+            desc_short = descripcion[:30] + '...' if len(descripcion) > 30 else descripcion
+            tk.Label(frame_tabla, text=desc_short, font=('Segoe UI', 9), bg=bg_color, anchor='w', padx=10, pady=5).grid(row=idx, column=2, sticky='ew')
+
+            monto_text = f"${monto:,.2f}" if moneda == 'USD' else f"${monto:,.0f}"
+            tk.Label(frame_tabla, text=f"{moneda} {monto_text}", font=('Segoe UI', 9, 'bold'), bg=bg_color,
+                     fg=COLORES['danger'], anchor='e', padx=10, pady=5).grid(row=idx, column=3, sticky='ew')
+
+            tk.Label(frame_tabla, text=cuenta, font=('Segoe UI', 9), bg=bg_color, anchor='w', padx=10, pady=5).grid(row=idx, column=4, sticky='ew')
+
+        for i in range(5):
+            frame_tabla.grid_columnconfigure(i, weight=1)
+
+    # === COTIZACIONES ===
+    def cargar_cotizaciones_previas(self):
+        cotizs = self.db.obtener_ultima_cotizacion()
+        if cotizs:
+            self.cotizaciones = cotizs
+            self.mostrar_cotizaciones()
+
+    def actualizar_cotizacion_dolar(self):
+        self.btn_dolar.config(text="⏳ Actualizando...", state='disabled')
+        self.root.update()
+        cotizaciones = obtener_cotizacion_dolar()
+        if cotizaciones:
+            self.cotizaciones = cotizaciones
+            for tipo, valores in cotizaciones.items():
+                self.db.guardar_cotizacion(tipo, valores['compra'], valores['venta'])
+            self.mostrar_cotizaciones()
+            ahora = dt.now().strftime("%H:%M")
+            self.lbl_ultima_actualizacion.config(text=f"Actualizado: {ahora}")
+        else:
+            messagebox.showerror("Error", "No se pudo obtener la cotización")
+        self.btn_dolar.config(text="💱 Actualizar Dólar", state='normal')
+
+    def mostrar_cotizaciones(self):
+        for widget in self.frame_cotizaciones.winfo_children():
+            widget.destroy()
+        if not self.cotizaciones:
+            return
+
+        tk.Label(self.frame_cotizaciones, text="💱 Cotización del Dólar", font=('Segoe UI', 12, 'bold'), bg=COLORES['light']).pack(pady=10)
+        
+        # Mini ayuda
+        ayuda = "💡 Compra: lo que pagás para adquirir dólares.\nVenta: lo que te dan al vender dólares.\nBlue: informal | MEP/CCL: legales"
+        tk.Label(self.frame_cotizaciones, text=ayuda, font=('Segoe UI', 8), bg=COLORES['light'], fg=COLORES['text'], justify=tk.LEFT).pack(pady=(0, 10))
+
+        frame_grid = tk.Frame(self.frame_cotizaciones, bg=COLORES['light'])
+        frame_grid.pack(padx=20, pady=5)
+        tipos = ['Blue', 'Oficial', 'MEP', 'CCL']
+        for i, tipo in enumerate(tipos):
+            if tipo in self.cotizaciones:
+                valores = self.cotizaciones[tipo]
+                frame_cotiz = tk.Frame(frame_grid, bg='white', relief=tk.RAISED, borderwidth=1)
+                frame_cotiz.grid(row=0, column=i, padx=8, pady=5)
+                tk.Label(frame_cotiz, text=f"💵 {tipo}", font=('Segoe UI', 10, 'bold'), bg='white').pack(pady=(8, 5))
+                tk.Label(frame_cotiz, text=f"🟢 Compra:\n${valores['compra']:.2f}", font=('Segoe UI', 9), bg='white', fg=COLORES['success']).pack()
+                tk.Label(frame_cotiz, text=f"🔴 Venta:\n${valores['venta']:.2f}", font=('Segoe UI', 9), bg='white', fg=COLORES['danger']).pack(pady=(0, 8))
+
+    # === GESTIÓN DE CATEGORÍAS ===
+    def ventana_gestion_categorias(self):
+        ventana = tk.Toplevel(self.root)
+        ventana.title("⚙️ Gestionar Categorías")
+        ventana.geometry("500x400")
+        ventana.configure(bg=COLORES['background'])
+        ventana.transient(self.root)
+        ventana.grab_set()
+
+        frame = tk.Frame(ventana, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(frame, text="Nueva Categoría", font=('Segoe UI', 12, 'bold'), bg=COLORES['background']).pack(anchor='w', pady=(0, 10))
+        frame_nueva = tk.Frame(frame, bg=COLORES['background'])
+        frame_nueva.pack(fill=tk.X, pady=5)
+        entry_nombre = tk.Entry(frame_nueva, font=('Segoe UI', 11))
+        entry_nombre.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        entry_color = tk.Entry(frame_nueva, font=('Segoe UI', 11), width=10)
+        entry_color.insert(0, "#4ecdc4")
+        entry_color.pack(side=tk.LEFT)
+        def agregar():
+            nombre = entry_nombre.get().strip()
+            color = entry_color.get().strip()
+            if nombre and color.startswith('#') and len(color) == 7:
+                try:
+                    self.db.agregar_categoria(nombre, color)
+                    entry_nombre.delete(0, tk.END)
+                    messagebox.showinfo("Éxito", "Categoría agregada")
+                    self.cargar_categorias_combo()
+                except sqlite3.IntegrityError:
+                    messagebox.showerror("Error", "Ya existe una categoría con ese nombre")
+            else:
+                messagebox.showerror("Error", "Nombre y color (#RRGGBB) válidos")
+        tk.Button(frame_nueva, text="➕ Agregar", command=agregar, bg=COLORES['success'], fg='white').pack(side=tk.LEFT, padx=(10, 0))
+
+        tk.Label(frame, text="Categorías Existentes", font=('Segoe UI', 12, 'bold'), bg=COLORES['background']).pack(anchor='w', pady=(20, 10))
+        frame_lista = tk.Frame(frame, bg=COLORES['background'])
+        frame_lista.pack(fill=tk.BOTH, expand=True)
+        canvas = tk.Canvas(frame_lista, bg=COLORES['background'])
+        scrollbar = ttk.Scrollbar(frame_lista, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg=COLORES['background'])
+        scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        categorias = self.db.obtener_categorias()
+        for cat in categorias:
+            frame_cat = tk.Frame(scrollable_frame, bg=COLORES['card_bg'], relief=tk.RAISED, borderwidth=1)
+            frame_cat.pack(fill=tk.X, pady=5)
+            tk.Label(frame_cat, text=cat[1], font=('Segoe UI', 10), bg=COLORES['card_bg']).pack(side=tk.LEFT, padx=10)
+            tk.Label(frame_cat, text=cat[2], font=('Segoe UI', 10), bg=cat[2], fg='white', width=10).pack(side=tk.LEFT, padx=5)
+            def eliminar(nombre=cat[1]):
+                if messagebox.askyesno("Confirmar", f"¿Eliminar categoría '{nombre}'?"):
+                    self.db.eliminar_categoria(nombre)
+                    ventana.destroy()
+                    self.ventana_gestion_categorias()
+                    self.cargar_categorias_combo()
+            tk.Button(frame_cat, text="🗑️", command=eliminar, bg=COLORES['danger'], fg='white', width=3).pack(side=tk.RIGHT, padx=10)
+
+    # === FORMULARIO DE GASTO RÁPIDO ===
+    def abrir_form_gasto_rapido(self):
+        ventana = tk.Toplevel(self.root)
+        ventana.title("➕ Agregar Gasto Rápido")
+        ventana.geometry("600x500")
+        ventana.configure(bg=COLORES['background'])
+        ventana.transient(self.root)
+        ventana.grab_set()
+
+        frame = tk.Frame(ventana, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        # Fecha, moneda, monto
+        row1 = tk.Frame(frame, bg=COLORES['background'])
+        row1.pack(fill=tk.X, pady=5)
+        tk.Label(row1, text="📅 Fecha:", bg=COLORES['background']).pack(side=tk.LEFT)
+        entry_fecha = tk.Entry(row1, width=12)
+        entry_fecha.insert(0, datetime.date.today().isoformat())
+        entry_fecha.pack(side=tk.LEFT, padx=10)
+        tk.Label(row1, text="💱 Moneda:", bg=COLORES['background']).pack(side=tk.LEFT)
+        combo_moneda = ttk.Combobox(row1, values=['ARS', 'USD'], state='readonly', width=8)
+        combo_moneda.set('ARS')
+        combo_moneda.pack(side=tk.LEFT, padx=10)
+        tk.Label(row1, text="💰 Monto:", bg=COLORES['background']).pack(side=tk.LEFT)
+        entry_monto = tk.Entry(row1, width=15)
+        entry_monto.pack(side=tk.LEFT, padx=10)
+
+        # Categorías como botones
+        tk.Label(frame, text="📂 Categoría:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=(15, 5))
+        frame_cats = tk.Frame(frame, bg=COLORES['background'])
+        frame_cats.pack(fill=tk.X, pady=5)
+        canvas_cats = tk.Canvas(frame_cats, bg=COLORES['background'], height=80, highlightthickness=0)
+        scrollbar_cats = ttk.Scrollbar(frame_cats, orient="horizontal", command=canvas_cats.xview)
+        frame_scroll_cats = tk.Frame(canvas_cats, bg=COLORES['background'])
+        frame_scroll_cats.bind("<Configure>", lambda e: canvas_cats.configure(scrollregion=canvas_cats.bbox("all")))
+        canvas_cats.create_window((0, 0), window=frame_scroll_cats, anchor="nw")
+        canvas_cats.configure(xscrollcommand=scrollbar_cats.set)
+        canvas_cats.pack(fill=tk.X)
+        scrollbar_cats.pack(fill=tk.X)
+
+        categorias = self.db.obtener_categorias()
+        self.categoria_seleccionada = categorias[0][1] if categorias else ""
+        for cat in categorias:
+            btn = tk.Button(
+                frame_scroll_cats,
+                text=cat[1],
+                bg=cat[2],
+                fg='white',
+                font=('Segoe UI', 9, 'bold'),
+                relief=tk.FLAT,
+                command=lambda c=cat[1]: setattr(self, 'categoria_seleccionada', c) or [b.config(relief=tk.FLAT) for b in frame_scroll_cats.winfo_children()] or btn.config(relief=tk.SUNKEN)
+            )
+            btn.pack(side=tk.LEFT, padx=5, pady=5)
+            if cat[1] == self.categoria_seleccionada:
+                btn.config(relief=tk.SUNKEN)
+
+        # Cuenta, descripción, notas
+        row2 = tk.Frame(frame, bg=COLORES['background'])
+        row2.pack(fill=tk.X, pady=5)
+        tk.Label(row2, text="💳 Cuenta:", bg=COLORES['background']).pack(side=tk.LEFT)
+        combo_cuenta = ttk.Combobox(row2, values=[c[1] for c in self.db.obtener_cuentas()], state='readonly', width=20)
+        combo_cuenta.set('💵 Efectivo')
+        combo_cuenta.pack(side=tk.LEFT, padx=10)
+        tk.Label(row2, text="📝 Descripción:", bg=COLORES['background']).pack(side=tk.LEFT, padx=(20, 0))
+        entry_desc = tk.Entry(row2, width=30)
+        entry_desc.pack(side=tk.LEFT, padx=10)
+
+        tk.Label(frame, text="📋 Notas (opcional):", bg=COLORES['background']).pack(anchor='w', pady=(10, 5))
+        entry_notas = tk.Entry(frame, width=50)
+        entry_notas.pack(fill=tk.X, pady=5)
+
+        def guardar():
+            try:
+                fecha = entry_fecha.get()
+                monto = float(entry_monto.get().replace(',', '.'))
+                moneda = combo_moneda.get()
+                categoria = self.categoria_seleccionada
+                cuenta = combo_cuenta.get()
+                descripcion = entry_desc.get() or "Sin descripción"
+                notas = entry_notas.get()
+                self.db.agregar_gasto(fecha, categoria, monto, moneda, descripcion, cuenta, notas, None)
+                messagebox.showinfo("Éxito", "Gasto agregado")
+                ventana.destroy()
+                self.cargar_dashboard()
+                self.cargar_lista_gastos()
+            except Exception as e:
+                messagebox.showerror("Error", f"Monto inválido o datos incompletos\n{e}")
+
+        tk.Button(frame, text="✅ Agregar Gasto", command=guardar, bg=COLORES['success'], fg='white', font=('Segoe UI', 12, 'bold'), pady=10).pack(pady=20)
+
+    # === PESTAÑA AHORROS ===
+    def crear_tab_ahorros(self):
+        frame = tk.Frame(self.tab_ahorros, bg=COLORES['background'])
+        frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+        tk.Button(frame, text="➕ Agregar Ahorro", command=self.agregar_ahorro, bg=COLORES['success'], fg='white').pack(anchor='w', pady=(0, 15))
+
+        # Resumen
+        self.frame_resumen_ahorros = tk.Frame(frame, bg=COLORES['background'])
+        self.frame_resumen_ahorros.pack(fill=tk.X, pady=10)
+
+        # Lista
+        self.tree_ahorros = ttk.Treeview(frame, columns=('ID', 'Fecha', 'Monto', 'Moneda', 'Nota'), show='headings')
+        self.tree_ahorros.heading('ID', text='ID')
+        self.tree_ahorros.heading('Fecha', text='Fecha')
+        self.tree_ahorros.heading('Monto', text='Monto')
+        self.tree_ahorros.heading('Moneda', text='Moneda')
+        self.tree_ahorros.heading('Nota', text='Nota')
+        self.tree_ahorros.column('ID', width=50, anchor='center')
+        self.tree_ahorros.column('Fecha', width=100, anchor='center')
+        self.tree_ahorros.column('Monto', width=100, anchor='e')
+        self.tree_ahorros.column('Moneda', width=70, anchor='center')
+        self.tree_ahorros.column('Nota', width=300)
+        self.tree_ahorros.pack(fill=tk.BOTH, expand=True, pady=10)
+
+        self.cargar_ahorros()
+
+    def cargar_ahorros(self):
+        for item in self.tree_ahorros.get_children():
+            self.tree_ahorros.delete(item)
+        ahorros = self.db.obtener_ahorros()
+        total_ars = sum(a[2] for a in ahorros if a[3] == 'ARS')
+        total_usd = sum(a[2] for a in ahorros if a[3] == 'USD')
+        for a in ahorros:
+            monto_fmt = f"${a[2]:,.2f}" if a[3] == 'USD' else f"${a[2]:,.0f}"
+            self.tree_ahorros.insert('', 'end', values=(a[0], a[1], monto_fmt, a[3], a[4] or ""))
+
+        for w in self.frame_resumen_ahorros.winfo_children():
+            w.destroy()
+        tk.Label(self.frame_resumen_ahorros, text=f"🐷 Total Ahorrado ARS: ${total_ars:,.0f}", font=('Segoe UI', 12, 'bold'), bg=COLORES['background'], fg=COLORES['success']).pack(side=tk.LEFT, padx=10)
+        if total_usd > 0:
+            tk.Label(self.frame_resumen_ahorros, text=f"🐷 Total Ahorrado USD: USD ${total_usd:,.2f}", font=('Segoe UI', 12, 'bold'), bg=COLORES['background'], fg=COLORES['secondary']).pack(side=tk.LEFT, padx=10)
+
+    def agregar_ahorro(self):
+        ventana = tk.Toplevel(self.root)
+        ventana.title("🐷 Agregar Ahorro")
+        ventana.geometry("400x300")
+        ventana.configure(bg=COLORES['background'])
+        ventana.transient(self.root)
+        ventana.grab_set()
+
+        frame = tk.Frame(ventana, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(frame, text="📅 Fecha:", bg=COLORES['background']).pack(anchor='w')
+        entry_fecha = tk.Entry(frame)
+        entry_fecha.insert(0, datetime.date.today().isoformat())
+        entry_fecha.pack(fill=tk.X, pady=5)
+
+        tk.Label(frame, text="💱 Moneda:", bg=COLORES['background']).pack(anchor='w')
+        combo_moneda = ttk.Combobox(frame, values=['ARS', 'USD'], state='readonly')
+        combo_moneda.set('ARS')
+        combo_moneda.pack(fill=tk.X, pady=5)
+
+        tk.Label(frame, text="💰 Monto:", bg=COLORES['background']).pack(anchor='w')
+        entry_monto = tk.Entry(frame)
+        entry_monto.pack(fill=tk.X, pady=5)
+
+        tk.Label(frame, text="📝 Nota (opcional):", bg=COLORES['background']).pack(anchor='w')
+        entry_nota = tk.Entry(frame)
+        entry_nota.pack(fill=tk.X, pady=5)
+
+        def guardar():
+            try:
+                fecha = entry_fecha.get()
+                monto = float(entry_monto.get().replace(',', '.'))
+                moneda = combo_moneda.get()
+                nota = entry_nota.get()
+                self.db.agregar_ahorro(fecha, monto, moneda, nota)
+                messagebox.showinfo("Éxito", "Ahorro registrado")
+                ventana.destroy()
+                self.cargar_ahorros()
+            except:
+                messagebox.showerror("Error", "Datos inválidos")
+
+        tk.Button(frame, text="✅ Guardar Ahorro", command=guardar, bg=COLORES['success'], fg='white', pady=10).pack(pady=15)
+
+    # === VISTA GASTOS EN USD ===
+    def ver_gastos_usd(self):
+        gastos_usd = [g for g in self.db.obtener_gastos() if g[4] == 'USD']
+        if not gastos_usd:
+            messagebox.showinfo("Sin gastos en USD", "No tenés gastos registrados en dólares")
+            return
+
+        ventana = tk.Toplevel(self.root)
+        ventana.title("💵 Gastos en Dólares")
+        ventana.geometry("800x500")
+        ventana.configure(bg=COLORES['background'])
+
+        frame = tk.Frame(ventana, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        total_usd = sum(g[3] for g in gastos_usd)
+        blue = self.cotizaciones.get('Blue', {}).get('venta', 1000)
+        equivalente_ars = total_usd * blue
+
+        tk.Label(frame, text=f"💵 Total gastado en USD: USD ${total_usd:,.2f}", font=('Segoe UI', 14, 'bold'), bg=COLORES['background'], fg=COLORES['secondary']).pack(anchor='w')
+        tk.Label(frame, text=f"💱 Equivalente en ARS (Blue): ${equivalente_ars:,.0f}", font=('Segoe UI', 12), bg=COLORES['background'], fg=COLORES['danger']).pack(anchor='w', pady=(0, 20))
+
+        tree = ttk.Treeview(frame, columns=('Fecha', 'Categoría', 'Monto USD', 'Descripción', 'Cuenta'), show='headings')
+        for col in tree['columns']:
+            tree.heading(col, text=col)
+            tree.column(col, width=150)
+        tree.pack(fill=tk.BOTH, expand=True)
+
+        for g in gastos_usd:
+            tree.insert('', 'end', values=(g[1], g[2], f"${g[3]:,.2f}", g[5], g[6]))
+
+    # === PESTAÑA GASTOS (COMPLETA) ===
+    def crear_tab_gastos(self):
+        frame_form = tk.LabelFrame(
+            self.tab_gastos,
+            text="➕ Agregar Nuevo Gasto",
+            font=('Segoe UI', 12, 'bold'),
+            bg=COLORES['background'],
+            padx=20,
+            pady=15
+        )
+        frame_form.pack(fill=tk.X, padx=20, pady=10)
+        row1 = tk.Frame(frame_form, bg=COLORES['background'])
+        row1.pack(fill=tk.X, pady=5)
+        tk.Label(row1, text="📅 Fecha:", font=('Segoe UI', 10), bg=COLORES['background']).pack(side=tk.LEFT, padx=(0, 5))
+        self.entry_fecha = tk.Entry(row1, font=('Segoe UI', 10), width=12)
+        self.entry_fecha.insert(0, datetime.date.today().isoformat())
+        self.entry_fecha.pack(side=tk.LEFT, padx=(0, 20))
+        tk.Label(row1, text="💱 Moneda:", font=('Segoe UI', 10), bg=COLORES['background']).pack(side=tk.LEFT, padx=(0, 5))
+        self.combo_moneda = ttk.Combobox(row1, values=['ARS', 'USD'], state='readonly', width=8, font=('Segoe UI', 10))
+        self.combo_moneda.set('ARS')
+        self.combo_moneda.pack(side=tk.LEFT, padx=(0, 20))
+        tk.Label(row1, text="💰 Monto:", font=('Segoe UI', 10), bg=COLORES['background']).pack(side=tk.LEFT, padx=(0, 5))
+        self.entry_monto = tk.Entry(row1, font=('Segoe UI', 10), width=15)
+        self.entry_monto.pack(side=tk.LEFT)
+        row2 = tk.Frame(frame_form, bg=COLORES['background'])
+        row2.pack(fill=tk.X, pady=5)
+        tk.Label(row2, text="📂 Categoría:", font=('Segoe UI', 10), bg=COLORES['background']).pack(side=tk.LEFT, padx=(0, 5))
+        self.combo_categoria = ttk.Combobox(row2, state='readonly', width=25, font=('Segoe UI', 10))
+        self.cargar_categorias_combo()
+        self.combo_categoria.pack(side=tk.LEFT, padx=(0, 20))
+        tk.Label(row2, text="💳 Cuenta:", font=('Segoe UI', 10), bg=COLORES['background']).pack(side=tk.LEFT, padx=(0, 5))
+        self.combo_cuenta = ttk.Combobox(row2, state='readonly', width=20, font=('Segoe UI', 10))
+        self.cargar_cuentas_combo()
+        self.combo_cuenta.pack(side=tk.LEFT)
+        self.combo_cuenta.bind('<<ComboboxSelected>>', self.on_cuenta_change)
+        self.row_tarjeta = tk.Frame(frame_form, bg=COLORES['background'])
+        tk.Label(self.row_tarjeta, text="💳 Tarjeta:", font=('Segoe UI', 10), bg=COLORES['background']).pack(side=tk.LEFT, padx=(0, 5))
+        self.combo_tarjeta = ttk.Combobox(self.row_tarjeta, state='readonly', width=30, font=('Segoe UI', 10))
+        self.cargar_tarjetas_combo()
+        self.combo_tarjeta.pack(side=tk.LEFT)
+        row3 = tk.Frame(frame_form, bg=COLORES['background'])
+        row3.pack(fill=tk.X, pady=5)
+        tk.Label(row3, text="📝 Descripción:", font=('Segoe UI', 10), bg=COLORES['background']).pack(side=tk.LEFT, padx=(0, 5))
+        self.entry_descripcion = tk.Entry(row3, font=('Segoe UI', 10), width=50)
+        self.entry_descripcion.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        row4 = tk.Frame(frame_form, bg=COLORES['background'])
+        row4.pack(fill=tk.X, pady=5)
+        tk.Label(row4, text="📋 Notas:", font=('Segoe UI', 10), bg=COLORES['background']).pack(side=tk.LEFT, padx=(0, 5))
+        self.entry_notas = tk.Entry(row4, font=('Segoe UI', 10), width=50)
+        self.entry_notas.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        tk.Button(
+            frame_form,
+            text="✅ Agregar Gasto",
+            command=self.agregar_gasto,
+            bg=COLORES['success'],
+            fg='white',
+            font=('Segoe UI', 11, 'bold'),
+            cursor='hand2',
+            relief=tk.FLAT,
+            padx=30,
+            pady=10
+        ).pack(pady=10)
+        frame_lista = tk.LabelFrame(
+            self.tab_gastos,
+            text="📋 Lista de Gastos",
+            font=('Segoe UI', 12, 'bold'),
+            bg=COLORES['background'],
+            padx=10,
+            pady=10
+        )
+        frame_lista.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        frame_filtros = tk.Frame(frame_lista, bg=COLORES['background'])
+        frame_filtros.pack(fill=tk.X, pady=(0, 10))
+        tk.Label(frame_filtros, text="📅 Mes:", font=('Segoe UI', 10), bg=COLORES['background']).pack(side=tk.LEFT, padx=(0, 5))
+        self.combo_mes_gastos = ttk.Combobox(
+            frame_filtros,
+            values=self.generar_meses(),
+            state='readonly',
+            font=('Segoe UI', 10),
+            width=15
+        )
+        self.combo_mes_gastos.set(self.mes_actual)
+        self.combo_mes_gastos.pack(side=tk.LEFT, padx=(0, 20))
+        tk.Button(
+            frame_filtros,
+            text="🔍 Filtrar",
+            command=self.cargar_lista_gastos,
+            bg=COLORES['primary'],
+            fg='white',
+            font=('Segoe UI', 9, 'bold'),
+            cursor='hand2',
+            relief=tk.FLAT,
+            padx=15,
+            pady=5
+        ).pack(side=tk.LEFT)
+        frame_tree = tk.Frame(frame_lista, bg=COLORES['background'])
+        frame_tree.pack(fill=tk.BOTH, expand=True)
+        scrollbar_y = ttk.Scrollbar(frame_tree, orient="vertical")
+        scrollbar_x = ttk.Scrollbar(frame_tree, orient="horizontal")
+        self.tree_gastos = ttk.Treeview(
+            frame_tree,
+            columns=('ID', 'Fecha', 'Categoría', 'Monto', 'Moneda', 'Descripción', 'Cuenta'),
+            show='headings',
+            yscrollcommand=scrollbar_y.set,
+            xscrollcommand=scrollbar_x.set,
+            height=15
+        )
+        scrollbar_y.config(command=self.tree_gastos.yview)
+        scrollbar_x.config(command=self.tree_gastos.xview)
+        self.tree_gastos.heading('ID', text='ID')
+        self.tree_gastos.heading('Fecha', text='Fecha')
+        self.tree_gastos.heading('Categoría', text='Categoría')
+        self.tree_gastos.heading('Monto', text='Monto')
+        self.tree_gastos.heading('Moneda', text='Moneda')
+        self.tree_gastos.heading('Descripción', text='Descripción')
+        self.tree_gastos.heading('Cuenta', text='Cuenta')
+        self.tree_gastos.column('ID', width=50, anchor='center')
+        self.tree_gastos.column('Fecha', width=100, anchor='center')
+        self.tree_gastos.column('Categoría', width=150)
+        self.tree_gastos.column('Monto', width=100, anchor='e')
+        self.tree_gastos.column('Moneda', width=70, anchor='center')
+        self.tree_gastos.column('Descripción', width=250)
+        self.tree_gastos.column('Cuenta', width=120)
+        self.tree_gastos.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar_y.pack(side=tk.RIGHT, fill=tk.Y)
+        scrollbar_x.pack(side=tk.BOTTOM, fill=tk.X)
+        frame_acciones = tk.Frame(frame_lista, bg=COLORES['background'])
+        frame_acciones.pack(fill=tk.X, pady=10)
+        tk.Button(
+            frame_acciones,
+            text="✏️ Editar",
+            command=self.editar_gasto_seleccionado,
+            bg=COLORES['warning'],
+            fg='white',
+            font=('Segoe UI', 10, 'bold'),
+            cursor='hand2',
+            relief=tk.FLAT,
+            padx=20,
+            pady=8
+        ).pack(side=tk.LEFT, padx=5)
+        tk.Button(
+            frame_acciones,
+            text="🗑️ Eliminar",
+            command=self.eliminar_gasto_seleccionado,
+            bg=COLORES['danger'],
+            fg='white',
+            font=('Segoe UI', 10, 'bold'),
+            cursor='hand2',
+            relief=tk.FLAT,
+            padx=20,
+            pady=8
+        ).pack(side=tk.LEFT, padx=5)
+        self.cargar_lista_gastos()
+
+    def cargar_categorias_combo(self):
+        categorias = self.db.obtener_categorias()
+        nombres = [cat[1] for cat in categorias]
+        self.combo_categoria['values'] = nombres
+        if nombres:
+            self.combo_categoria.current(0)
+
+    def cargar_cuentas_combo(self):
+        cuentas = self.db.obtener_cuentas()
+        nombres = [cuenta[1] for cuenta in cuentas]
+        self.combo_cuenta['values'] = nombres
+        if nombres:
+            self.combo_cuenta.current(0)
+
+    def cargar_tarjetas_combo(self):
+        tarjetas = self.db.obtener_tarjetas()
+        nombres = [''] + [f"{t[1]} - {t[2]}" for t in tarjetas]
+        self.combo_tarjeta['values'] = nombres
+        self.combo_tarjeta.set('')
+
+    def on_cuenta_change(self, event=None):
+        cuenta = self.combo_cuenta.get()
+        if 'crédito' in cuenta.lower() or 'credito' in cuenta.lower():
+            self.row_tarjeta.pack(fill=tk.X, pady=5)
+        else:
+            self.row_tarjeta.pack_forget()
+
+    def agregar_gasto(self):
+        try:
+            fecha = self.entry_fecha.get()
+            categoria = self.combo_categoria.get()
+            monto = float(self.entry_monto.get().replace(',', '.'))
+            moneda = self.combo_moneda.get()
+            descripcion = self.entry_descripcion.get()
+            cuenta = self.combo_cuenta.get()
+            notas = self.entry_notas.get()
+            tarjeta_id = None
+            if 'crédito' in cuenta.lower() or 'credito' in cuenta.lower():
+                tarjeta_sel = self.combo_tarjeta.get()
+                if tarjeta_sel:
+                    nombre_tarjeta = tarjeta_sel.split(' - ')[0]
+                    tarjetas = self.db.obtener_tarjetas()
+                    tarjeta = next((t for t in tarjetas if t[1] == nombre_tarjeta), None)
+                    if tarjeta:
+                        tarjeta_id = tarjeta[0]
+            if not all([fecha, categoria, monto, descripcion, cuenta]):
+                messagebox.showwarning("Campos vacíos", "Por favor completá todos los campos obligatorios")
+                return
+            self.db.agregar_gasto(fecha, categoria, monto, moneda, descripcion, cuenta, notas, tarjeta_id)
+            messagebox.showinfo("Éxito", "Gasto agregado correctamente")
+            self.entry_fecha.delete(0, tk.END)
+            self.entry_fecha.insert(0, datetime.date.today().isoformat())
+            self.entry_monto.delete(0, tk.END)
+            self.entry_descripcion.delete(0, tk.END)
+            self.entry_notas.delete(0, tk.END)
+            self.combo_moneda.set('ARS')
+            self.combo_tarjeta.set('')
+            self.cargar_lista_gastos()
+            self.cargar_dashboard()
+        except ValueError:
+            messagebox.showerror("Error", "El monto debe ser un número válido")
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al agregar gasto: {str(e)}")
+
+    def cargar_lista_gastos(self):
+        for item in self.tree_gastos.get_children():
+            self.tree_gastos.delete(item)
+        mes = self.combo_mes_gastos.get()
+        gastos = self.db.obtener_gastos(mes=mes)
+        for gasto in gastos:
+            id_gasto, fecha, categoria, monto, moneda, descripcion, cuenta = gasto[:7]
+            monto_format = f"${monto:,.2f}" if moneda == 'USD' else f"${monto:,.0f}"
+            self.tree_gastos.insert(
+                '',
+                'end',
+                values=(id_gasto, fecha, categoria, monto_format, moneda, descripcion, cuenta)
+            )
+
+    def editar_gasto_seleccionado(self):
+        seleccion = self.tree_gastos.selection()
+        if not seleccion:
+            messagebox.showwarning("Sin selección", "Por favor seleccioná un gasto para editar")
+            return
+        item = self.tree_gastos.item(seleccion[0])
+        valores = item['values']
+        id_gasto = valores[0]
+        gastos = self.db.obtener_gastos()
+        gasto = next((g for g in gastos if g[0] == id_gasto), None)
+        if not gasto:
+            return
+        self.ventana_editar_gasto(gasto)
+
+    def ventana_editar_gasto(self, gasto):
+        ventana = tk.Toplevel(self.root)
+        ventana.title("✏️ Editar Gasto")
+        ventana.geometry("500x400")
+        ventana.configure(bg=COLORES['background'])
+        ventana.transient(self.root)
+        ventana.grab_set()
+        id_gasto, fecha, categoria, monto, moneda, descripcion, cuenta, ticket, notas = gasto[:9]
+        frame = tk.Frame(ventana, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+        tk.Label(frame, text="📅 Fecha:", font=('Segoe UI', 10), bg=COLORES['background']).grid(row=0, column=0, sticky='w', pady=5)
+        entry_fecha = tk.Entry(frame, font=('Segoe UI', 10), width=30)
+        entry_fecha.insert(0, fecha)
+        entry_fecha.grid(row=0, column=1, pady=5)
+        tk.Label(frame, text="💱 Moneda:", font=('Segoe UI', 10), bg=COLORES['background']).grid(row=1, column=0, sticky='w', pady=5)
+        combo_moneda = ttk.Combobox(frame, values=['ARS', 'USD'], state='readonly', width=28, font=('Segoe UI', 10))
+        combo_moneda.set(moneda)
+        combo_moneda.grid(row=1, column=1, pady=5)
+        tk.Label(frame, text="💰 Monto:", font=('Segoe UI', 10), bg=COLORES['background']).grid(row=2, column=0, sticky='w', pady=5)
+        entry_monto = tk.Entry(frame, font=('Segoe UI', 10), width=30)
+        entry_monto.insert(0, str(monto))
+        entry_monto.grid(row=2, column=1, pady=5)
+        tk.Label(frame, text="📂 Categoría:", font=('Segoe UI', 10), bg=COLORES['background']).grid(row=3, column=0, sticky='w', pady=5)
+        combo_cat = ttk.Combobox(frame, state='readonly', width=28, font=('Segoe UI', 10))
+        categorias = self.db.obtener_categorias()
+        combo_cat['values'] = [cat[1] for cat in categorias]
+        combo_cat.set(categoria)
+        combo_cat.grid(row=3, column=1, pady=5)
+        tk.Label(frame, text="💳 Cuenta:", font=('Segoe UI', 10), bg=COLORES['background']).grid(row=4, column=0, sticky='w', pady=5)
+        combo_cuenta = ttk.Combobox(frame, state='readonly', width=28, font=('Segoe UI', 10))
+        cuentas = self.db.obtener_cuentas()
+        combo_cuenta['values'] = [c[1] for c in cuentas]
+        combo_cuenta.set(cuenta)
+        combo_cuenta.grid(row=4, column=1, pady=5)
+        tk.Label(frame, text="📝 Descripción:", font=('Segoe UI', 10), bg=COLORES['background']).grid(row=5, column=0, sticky='w', pady=5)
+        entry_desc = tk.Entry(frame, font=('Segoe UI', 10), width=30)
+        entry_desc.insert(0, descripcion)
+        entry_desc.grid(row=5, column=1, pady=5)
+        tk.Label(frame, text="📋 Notas:", font=('Segoe UI', 10), bg=COLORES['background']).grid(row=6, column=0, sticky='w', pady=5)
+        entry_notas_edit = tk.Entry(frame, font=('Segoe UI', 10), width=30)
+        entry_notas_edit.insert(0, notas if notas else '')
+        entry_notas_edit.grid(row=6, column=1, pady=5)
+        def guardar_cambios():
+            try:
+                nueva_fecha = entry_fecha.get()
+                nueva_cat = combo_cat.get()
+                nuevo_monto = float(entry_monto.get().replace(',', '.'))
+                nueva_moneda = combo_moneda.get()
+                nueva_desc = entry_desc.get()
+                nueva_cuenta = combo_cuenta.get()
+                nuevas_notas = entry_notas_edit.get()
+                self.db.actualizar_gasto(
+                    id_gasto,
+                    nueva_fecha,
+                    nueva_cat,
+                    nuevo_monto,
+                    nueva_moneda,
+                    nueva_desc,
+                    nueva_cuenta,
+                    nuevas_notas,
+                    None
+                )
+                messagebox.showinfo("Éxito", "Gasto actualizado correctamente")
+                ventana.destroy()
+                self.cargar_lista_gastos()
+                self.cargar_dashboard()
+            except ValueError:
+                messagebox.showerror("Error", "El monto debe ser un número válido")
+            except Exception as e:
+                messagebox.showerror("Error", f"Error al actualizar: {str(e)}")
+        frame_btn = tk.Frame(frame, bg=COLORES['background'])
+        frame_btn.grid(row=7, column=0, columnspan=2, pady=20)
+        tk.Button(
+            frame_btn,
+            text="💾 Guardar Cambios",
+            command=guardar_cambios,
+            bg=COLORES['success'],
+            fg='white',
+            font=('Segoe UI', 10, 'bold'),
+            cursor='hand2',
+            relief=tk.FLAT,
+            padx=20,
+            pady=8
+        ).pack(side=tk.LEFT, padx=5)
+        tk.Button(
+            frame_btn,
+            text="❌ Cancelar",
+            command=ventana.destroy,
+            bg=COLORES['danger'],
+            fg='white',
+            font=('Segoe UI', 10, 'bold'),
+            cursor='hand2',
+            relief=tk.FLAT,
+            padx=20,
+            pady=8
+        ).pack(side=tk.LEFT, padx=5)
+
+    def eliminar_gasto_seleccionado(self):
+        seleccion = self.tree_gastos.selection()
+        if not seleccion:
+            messagebox.showwarning("Sin selección", "Por favor seleccioná un gasto para eliminar")
+            return
+        respuesta = messagebox.askyesno(
+            "Confirmar eliminación",
+            "¿Estás seguro de que querés eliminar este gasto?"
+        )
+        if respuesta:
+            item = self.tree_gastos.item(seleccion[0])
+            id_gasto = item['values'][0]
+            self.db.eliminar_gasto(id_gasto)
+            messagebox.showinfo("Éxito", "Gasto eliminado correctamente")
+            self.cargar_lista_gastos()
+            self.cargar_dashboard()
+
+    # === PESTAÑA TARJETAS ===
+    def crear_tab_tarjetas(self):
+        canvas = tk.Canvas(self.tab_tarjetas, bg=COLORES['background'])
+        scrollbar = ttk.Scrollbar(self.tab_tarjetas, orient="vertical", command=canvas.yview)
+        frame_scroll = tk.Frame(canvas, bg=COLORES['background'])
+        frame_scroll.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        canvas.create_window((0, 0), window=frame_scroll, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        frame_header = tk.Frame(frame_scroll, bg=COLORES['background'])
+        frame_header.pack(fill=tk.X, padx=20, pady=20)
+        tk.Label(
+            frame_header,
+            text="💳 Mis Tarjetas de Crédito",
+            font=('Segoe UI', 16, 'bold'),
+            bg=COLORES['background']
+        ).pack(side=tk.LEFT)
+        tk.Button(
+            frame_header,
+            text="➕ Agregar Tarjeta",
+            command=self.ventana_agregar_tarjeta,
+            bg=COLORES['success'],
+            fg='white',
+            font=('Segoe UI', 11, 'bold'),
+            cursor='hand2',
+            relief=tk.FLAT,
+            padx=20,
+            pady=10
+        ).pack(side=tk.RIGHT)
+        self.frame_tarjetas_list = tk.Frame(frame_scroll, bg=COLORES['background'])
+        self.frame_tarjetas_list.pack(fill=tk.BOTH, expand=True, padx=20)
+        self.cargar_tarjetas_display()
+
+    def cargar_tarjetas_display(self):
+        for widget in self.frame_tarjetas_list.winfo_children():
+            widget.destroy()
+        tarjetas = self.db.obtener_tarjetas()
+        if not tarjetas:
+            tk.Label(
+                self.frame_tarjetas_list,
+                text="No tenés tarjetas registradas\nAgregá una para comenzar",
+                font=('Segoe UI', 12),
+                bg=COLORES['background'],
+                fg=COLORES['text']
+            ).pack(pady=50)
+            return
+        for tarjeta in tarjetas:
+            self.crear_tarjeta_widget(tarjeta)
+
+    def crear_tarjeta_widget(self, tarjeta):
+        id_tarjeta, nombre, banco, limite, dia_cierre, dia_vencimiento, activa, notas = tarjeta
+        hoy = datetime.date.today()
+        if hoy.day <= dia_cierre:
+            fecha_cierre = datetime.date(hoy.year, hoy.month, dia_cierre)
+        else:
+            if hoy.month == 12:
+                fecha_cierre = datetime.date(hoy.year + 1, 1, dia_cierre)
+            else:
+                fecha_cierre = datetime.date(hoy.year, hoy.month + 1, dia_cierre)
+        if hoy.day <= dia_vencimiento:
+            fecha_vencimiento = datetime.date(hoy.year, hoy.month, dia_vencimiento)
+        else:
+            if hoy.month == 12:
+                fecha_vencimiento = datetime.date(hoy.year + 1, 1, dia_vencimiento)
+            else:
+                fecha_vencimiento = datetime.date(hoy.year, hoy.month + 1, dia_vencimiento)
+        if hoy.day > dia_cierre:
+            cierre_pasado = datetime.date(hoy.year, hoy.month, dia_cierre)
+        else:
+            if hoy.month == 1:
+                cierre_pasado = datetime.date(hoy.year - 1, 12, dia_cierre)
+            else:
+                cierre_pasado = datetime.date(hoy.year, hoy.month - 1, dia_cierre)
+        gastos_resumen = self.db.obtener_gastos_tarjeta(
+            id_tarjeta,
+            (cierre_pasado + timedelta(days=1)).isoformat(),
+            fecha_cierre.isoformat()
+        )
+        total_resumen = sum(g[3] for g in gastos_resumen if g[4] == 'ARS')
+        gastos_proximo = self.db.obtener_gastos_tarjeta(
+            id_tarjeta,
+            (fecha_cierre + timedelta(days=1)).isoformat()
+        )
+        total_proximo = sum(g[3] for g in gastos_proximo if g[4] == 'ARS')
+        disponible = limite - total_resumen
+        porcentaje = (total_resumen / limite * 100) if limite > 0 else 0
+        dias_vencimiento = (fecha_vencimiento - hoy).days
+        frame_tarjeta = tk.Frame(
+            self.frame_tarjetas_list,
+            bg='white',
+            relief=tk.RAISED,
+            borderwidth=2
+        )
+        frame_tarjeta.pack(fill=tk.X, pady=10, padx=5)
+        frame_header_tarj = tk.Frame(frame_tarjeta, bg=COLORES['primary'], height=60)
+        frame_header_tarj.pack(fill=tk.X)
+        frame_header_tarj.pack_propagate(False)
+        tk.Label(
+            frame_header_tarj,
+            text=f"💳 {nombre}",
+            font=('Segoe UI', 14, 'bold'),
+            bg=COLORES['primary'],
+            fg='white'
+        ).pack(side=tk.LEFT, padx=20, pady=15)
+        tk.Label(
+            frame_header_tarj,
+            text=banco,
+            font=('Segoe UI', 10),
+            bg=COLORES['primary'],
+            fg='white'
+        ).pack(side=tk.LEFT, padx=(0, 20))
+        if dias_vencimiento <= 5 and dias_vencimiento >= 0:
+            tk.Label(
+                frame_header_tarj,
+                text=f"⚠️ Vence en {dias_vencimiento} día{'s' if dias_vencimiento != 1 else ''}",
+                font=('Segoe UI', 10, 'bold'),
+                bg=COLORES['warning'],
+                fg='white',
+                padx=15,
+                pady=5
+            ).pack(side=tk.RIGHT, padx=20)
+        frame_body = tk.Frame(frame_tarjeta, bg='white', padx=20, pady=20)
+        frame_body.pack(fill=tk.BOTH, expand=True)
+        frame_col1 = tk.Frame(frame_body, bg='white')
+        frame_col1.grid(row=0, column=0, sticky='nw', padx=10)
+        tk.Label(
+            frame_col1,
+            text="Límite de Crédito",
+            font=('Segoe UI', 9),
+            bg='white',
+            fg=COLORES['text']
+        ).pack(anchor='w')
+        tk.Label(
+            frame_col1,
+            text=f"${limite:,.0f}",
+            font=('Segoe UI', 16, 'bold'),
+            bg='white',
+            fg=COLORES['info']
+        ).pack(anchor='w', pady=(0, 10))
+        tk.Label(
+            frame_col1,
+            text=f"Cierre: Día {dia_cierre} | Vto: Día {dia_vencimiento}",
+            font=('Segoe UI', 9),
+            bg='white',
+            fg=COLORES['text']
+        ).pack(anchor='w')
+        tk.Label(
+            frame_col1,
+            text=f"Próximo cierre: {fecha_cierre.strftime('%d/%m/%Y')}",
+            font=('Segoe UI', 9),
+            bg='white',
+            fg=COLORES['text']
+        ).pack(anchor='w')
+        tk.Label(
+            frame_col1,
+            text=f"Próximo vencimiento: {fecha_vencimiento.strftime('%d/%m/%Y')}",
+            font=('Segoe UI', 9),
+            bg='white',
+            fg=COLORES['text']
+        ).pack(anchor='w')
+        frame_col2 = tk.Frame(frame_body, bg='white')
+        frame_col2.grid(row=0, column=1, sticky='nw', padx=30)
+        tk.Label(
+            frame_col2,
+            text="📄 Resumen Actual",
+            font=('Segoe UI', 10, 'bold'),
+            bg='white',
+            fg=COLORES['text']
+        ).pack(anchor='w')
+        tk.Label(
+            frame_col2,
+            text=f"(del {cierre_pasado.strftime('%d/%m')} al {fecha_cierre.strftime('%d/%m')})",
+            font=('Segoe UI', 8),
+            bg='white',
+            fg=COLORES['text']
+        ).pack(anchor='w', pady=(0, 5))
+        tk.Label(
+            frame_col2,
+            text=f"${total_resumen:,.0f}",
+            font=('Segoe UI', 18, 'bold'),
+            bg='white',
+            fg=COLORES['danger'] if porcentaje > 80 else COLORES['warning'] if porcentaje > 60 else COLORES['success']
+        ).pack(anchor='w')
+        tk.Label(
+            frame_col2,
+            text=f"{porcentaje:.1f}% usado",
+            font=('Segoe UI', 9),
+            bg='white',
+            fg=COLORES['text']
+        ).pack(anchor='w', pady=(0, 5))
+        frame_barra = tk.Frame(frame_col2, bg='#e0e0e0', height=10, width=200)
+        frame_barra.pack(anchor='w', pady=5)
+        frame_barra.pack_propagate(False)
+        color_barra = COLORES['danger'] if porcentaje > 80 else COLORES['warning'] if porcentaje > 60 else COLORES['success']
+        ancho_barra = int(200 * min(porcentaje, 100) / 100)
+        frame_progreso = tk.Frame(frame_barra, bg=color_barra, width=ancho_barra)
+        frame_progreso.pack(side=tk.LEFT, fill=tk.Y)
+        tk.Label(
+            frame_col2,
+            text=f"Disponible: ${disponible:,.0f}",
+            font=('Segoe UI', 9),
+            bg='white',
+            fg=COLORES['success'] if disponible > limite * 0.3 else COLORES['warning']
+        ).pack(anchor='w')
+        frame_col3 = tk.Frame(frame_body, bg='white')
+        frame_col3.grid(row=0, column=2, sticky='nw', padx=30)
+        tk.Label(
+            frame_col3,
+            text="📋 Próximo Resumen",
+            font=('Segoe UI', 10, 'bold'),
+            bg='white',
+            fg=COLORES['text']
+        ).pack(anchor='w')
+        tk.Label(
+            frame_col3,
+            text=f"(después del {fecha_cierre.strftime('%d/%m')})",
+            font=('Segoe UI', 8),
+            bg='white',
+            fg=COLORES['text']
+        ).pack(anchor='w', pady=(0, 5))
+        tk.Label(
+            frame_col3,
+            text=f"${total_proximo:,.0f}",
+            font=('Segoe UI', 18, 'bold'),
+            bg='white',
+            fg=COLORES['info']
+        ).pack(anchor='w')
+        tk.Label(
+            frame_col3,
+            text=f"{len(gastos_proximo)} gasto{'s' if len(gastos_proximo) != 1 else ''}",
+            font=('Segoe UI', 9),
+            bg='white',
+            fg=COLORES['text']
+        ).pack(anchor='w')
+        frame_acciones = tk.Frame(frame_tarjeta, bg='white', pady=10)
+        frame_acciones.pack(fill=tk.X)
+        tk.Button(
+            frame_acciones,
+            text="✏️ Editar",
+            command=lambda: self.ventana_editar_tarjeta(tarjeta),
+            bg=COLORES['warning'],
+            fg='white',
+            font=('Segoe UI', 9, 'bold'),
+            cursor='hand2',
+            relief=tk.FLAT,
+            padx=15,
+            pady=6
+        ).pack(side=tk.LEFT, padx=5)
+        tk.Button(
+            frame_acciones,
+            text="🗑️ Desactivar",
+            command=lambda: self.desactivar_tarjeta_confirm(id_tarjeta),
+            bg=COLORES['danger'],
+            fg='white',
+            font=('Segoe UI', 9, 'bold'),
+            cursor='hand2',
+            relief=tk.FLAT,
+            padx=15,
+            pady=6
+        ).pack(side=tk.LEFT, padx=5)
+
+    def ventana_agregar_tarjeta(self):
+        ventana = tk.Toplevel(self.root)
+        ventana.title("➕ Agregar Tarjeta")
+        ventana.geometry("500x450")
+        ventana.configure(bg=COLORES['background'])
+        ventana.transient(self.root)
+        ventana.grab_set()
+        frame = tk.Frame(ventana, bg=COLORES['background'], padx=30, pady=30)
+        frame.pack(fill=tk.BOTH, expand=True)
+        tk.Label(
+            frame,
+            text="💳 Nueva Tarjeta de Crédito",
+            font=('Segoe UI', 14, 'bold'),
+            bg=COLORES['background']
+        ).pack(pady=(0, 20))
+        tk.Label(frame, text="Nombre:", font=('Segoe UI', 10), bg=COLORES['background']).pack(anchor='w', pady=5)
+        entry_nombre = tk.Entry(frame, font=('Segoe UI', 11), width=35)
+        entry_nombre.pack(fill=tk.X, pady=5)
+        tk.Label(frame, text="Banco:", font=('Segoe UI', 10), bg=COLORES['background']).pack(anchor='w', pady=5)
+        entry_banco = tk.Entry(frame, font=('Segoe UI', 11), width=35)
+        entry_banco.pack(fill=tk.X, pady=5)
+        tk.Label(frame, text="Límite ($):", font=('Segoe UI', 10), bg=COLORES['background']).pack(anchor='w', pady=5)
+        entry_limite = tk.Entry(frame, font=('Segoe UI', 11), width=35)
+        entry_limite.pack(fill=tk.X, pady=5)
+        tk.Label(frame, text="Día cierre (1-31):", font=('Segoe UI', 10), bg=COLORES['background']).pack(anchor='w', pady=5)
+        entry_cierre = tk.Entry(frame, font=('Segoe UI', 11), width=35)
+        entry_cierre.pack(fill=tk.X, pady=5)
+        tk.Label(frame, text="Día vencimiento (1-31):", font=('Segoe UI', 10), bg=COLORES['background']).pack(anchor='w', pady=5)
+        entry_vto = tk.Entry(frame, font=('Segoe UI', 11), width=35)
+        entry_vto.pack(fill=tk.X, pady=5)
+        def guardar():
+            try:
+                nombre = entry_nombre.get()
+                banco = entry_banco.get()
+                limite = float(entry_limite.get().replace(',', '.'))
+                dia_cierre = int(entry_cierre.get())
+                dia_vto = int(entry_vto.get())
+                if not nombre or not banco:
+                    messagebox.showerror("Error", "Completá todos los campos")
+                    return
+                if dia_cierre < 1 or dia_cierre > 31:
+                    messagebox.showerror("Error", "Día de cierre entre 1-31")
+                    return
+                if dia_vto < 1 or dia_vto > 31:
+                    messagebox.showerror("Error", "Día de vencimiento entre 1-31")
+                    return
+                self.db.agregar_tarjeta(nombre, banco, limite, dia_cierre, dia_vto)
+                messagebox.showinfo("Éxito", "Tarjeta agregada")
+                ventana.destroy()
+                self.cargar_tarjetas_display()
+                self.cargar_tarjetas_combo()
+            except ValueError:
+                messagebox.showerror("Error", "Verificá los valores numéricos")
+        tk.Button(
+            frame,
+            text="💾 Guardar",
+            command=guardar,
+            bg=COLORES['success'],
+            fg='white',
+            font=('Segoe UI', 12, 'bold'),
+            cursor='hand2',
+            relief=tk.FLAT,
+            padx=30,
+            pady=12
+        ).pack(pady=20)
+
+    def ventana_editar_tarjeta(self, tarjeta):
+        id_tarjeta, nombre, banco, limite, dia_cierre, dia_vencimiento, activa, notas = tarjeta
+        ventana = tk.Toplevel(self.root)
+        ventana.title("✏️ Editar Tarjeta")
+        ventana.geometry("500x450")
+        ventana.configure(bg=COLORES['background'])
+        ventana.transient(self.root)
+        ventana.grab_set()
+        frame = tk.Frame(ventana, bg=COLORES['background'], padx=30, pady=30)
+        frame.pack(fill=tk.BOTH, expand=True)
+        tk.Label(frame, text="Nombre:", font=('Segoe UI', 10), bg=COLORES['background']).pack(anchor='w', pady=5)
+        entry_nombre = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_nombre.insert(0, nombre)
+        entry_nombre.pack(fill=tk.X, pady=5)
+        tk.Label(frame, text="Banco:", font=('Segoe UI', 10), bg=COLORES['background']).pack(anchor='w', pady=5)
+        entry_banco = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_banco.insert(0, banco)
+        entry_banco.pack(fill=tk.X, pady=5)
+        tk.Label(frame, text="Límite:", font=('Segoe UI', 10), bg=COLORES['background']).pack(anchor='w', pady=5)
+        entry_limite = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_limite.insert(0, str(limite))
+        entry_limite.pack(fill=tk.X, pady=5)
+        tk.Label(frame, text="Día cierre:", font=('Segoe UI', 10), bg=COLORES['background']).pack(anchor='w', pady=5)
+        entry_cierre = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_cierre.insert(0, str(dia_cierre))
+        entry_cierre.pack(fill=tk.X, pady=5)
+        tk.Label(frame, text="Día vencimiento:", font=('Segoe UI', 10), bg=COLORES['background']).pack(anchor='w', pady=5)
+        entry_vto = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_vto.insert(0, str(dia_vencimiento))
+        entry_vto.pack(fill=tk.X, pady=5)
+        def guardar():
+            try:
+                self.db.actualizar_tarjeta(
+                    id_tarjeta,
+                    entry_nombre.get(),
+                    entry_banco.get(),
+                    float(entry_limite.get()),
+                    int(entry_cierre.get()),
+                    int(entry_vto.get()),
+                    ''
+                )
+                messagebox.showinfo("Éxito", "Tarjeta actualizada")
+                ventana.destroy()
+                self.cargar_tarjetas_display()
+                self.cargar_tarjetas_combo()
+            except:
+                messagebox.showerror("Error", "Verificá los datos")
+        tk.Button(
+            frame,
+            text="💾 Guardar",
+            command=guardar,
+            bg=COLORES['success'],
+            fg='white',
+            font=('Segoe UI', 12, 'bold'),
+            cursor='hand2',
+            relief=tk.FLAT,
+            padx=30,
+            pady=12
+        ).pack(pady=20)
+
+    def desactivar_tarjeta_confirm(self, id_tarjeta):
+        respuesta = messagebox.askyesno("Confirmar", "¿Desactivar esta tarjeta?")
+        if respuesta:
+            self.db.desactivar_tarjeta(id_tarjeta)
+            messagebox.showinfo("Éxito", "Tarjeta desactivada")
+            self.cargar_tarjetas_display()
+            self.cargar_tarjetas_combo()
+
+    # === UTILIDADES ===
+    def generar_meses(self):
+        meses = []
+        hoy = datetime.date.today()
+        for i in range(12):
+            fecha = hoy - timedelta(days=30 * i)
+            meses.append(fecha.strftime('%Y-%m'))
+        return meses
+
+    def ventana_sueldo(self):
+        ventana = tk.Toplevel(self.root)
+        ventana.title("💰 Configurar Sueldo")
+        ventana.geometry("450x300")
+        ventana.configure(bg=COLORES['background'])
+        ventana.transient(self.root)
+        ventana.grab_set()
+        frame = tk.Frame(ventana, bg=COLORES['background'], padx=30, pady=30)
+        frame.pack(fill=tk.BOTH, expand=True)
+        tk.Label(frame, text="Mes:", font=('Segoe UI', 11), bg=COLORES['background']).pack(anchor='w', pady=5)
+        combo_mes = ttk.Combobox(
+            frame,
+            values=self.generar_meses(),
+            state='readonly',
+            font=('Segoe UI', 11),
+            width=20
+        )
+        combo_mes.set(self.mes_actual)
+        combo_mes.pack(fill=tk.X, pady=5)
+        tk.Label(frame, text="Monto del sueldo:", font=('Segoe UI', 11), bg=COLORES['background']).pack(anchor='w', pady=5)
+        entry_sueldo = tk.Entry(frame, font=('Segoe UI', 14), width=20)
+        sueldo_actual = self.db.obtener_sueldo_mes(self.mes_actual)
+        if sueldo_actual:
+            entry_sueldo.insert(0, str(sueldo_actual[2]))
+        entry_sueldo.pack(fill=tk.X, pady=5)
+        def guardar():
+            try:
+                mes = combo_mes.get()
+                monto = float(entry_sueldo.get().replace(',', '.'))
+                self.db.guardar_sueldo_mes(mes, monto)
+                messagebox.showinfo("Éxito", "Sueldo guardado")
+                ventana.destroy()
+                self.cargar_dashboard()
+            except ValueError:
+                messagebox.showerror("Error", "Monto inválido")
+        tk.Button(
+            frame,
+            text="💾 Guardar",
+            command=guardar,
+            bg=COLORES['success'],
+            fg='white',
+            font=('Segoe UI', 12, 'bold'),
+            cursor='hand2',
+            relief=tk.FLAT,
+            padx=30,
+            pady=12
+        ).pack(pady=20)
+
+    def exportar_excel(self):
+        try:
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment
+            gastos = self.db.obtener_gastos()
+            if not gastos:
+                messagebox.showwarning("Sin datos", "No hay gastos para exportar")
+                return
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Gastos"
+            headers = ['ID', 'Fecha', 'Categoría', 'Monto', 'Moneda', 'Descripción', 'Cuenta', 'Notas']
+            ws.append(headers)
+            for cell in ws[1]:
+                cell.font = Font(bold=True, color="FFFFFF")
+                cell.fill = PatternFill(start_color="4361ee", end_color="4361ee", fill_type="solid")
+                cell.alignment = Alignment(horizontal="center")
+            for gasto in gastos:
+                ws.append(list(gasto[:8]))
+            for column in ws.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)
+                ws.column_dimensions[column_letter].width = adjusted_width
+            archivo = filedialog.asksaveasfilename(
+                defaultextension=".xlsx",
+                filetypes=[("Excel files", "*.xlsx")],
+                initialfile=f"gastos_{datetime.date.today().isoformat()}.xlsx"
+            )
+            if archivo:
+                wb.save(archivo)
+                messagebox.showinfo("Éxito", f"Archivo exportado:\n{archivo}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al exportar: {str(e)}")
+
+    def hacer_backup(self):
+        try:
+            import shutil
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            archivo_backup = RUTA_BACKUPS / f"gastos_backup_{timestamp}.db"
+            shutil.copy2(RUTA_DB, archivo_backup)
+            messagebox.showinfo("Backup Creado", f"Backup creado:\n{archivo_backup}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Error: {str(e)}")
+
+    def mostrar_acerca_de(self):
+        messagebox.showinfo(
+            "Acerca de",
+            "💰 Gestor de Gastos Personal v2.0\n"
+            "Desarrollado por: Maximiliano Burgos\n"
+            "Año: 2025\n"
+            "Aplicación completa para control de gastos personales\n"
+            "con soporte para múltiples monedas, categorías\n"
+            "personalizables y gestión de tarjetas de crédito.\n"
+            "Tecnologías: Python, Tkinter, SQLite, Matplotlib"
+        )
+
+    def al_cerrar(self):
+        respuesta = messagebox.askyesno("Salir", "¿Cerrar la aplicación?")
+        if respuesta:
+            try:
+                import shutil
+                timestamp = datetime.datetime.now().strftime("%Y%m%d")
+                archivo_backup = RUTA_BACKUPS / f"gastos_auto_{timestamp}.db"
+                shutil.copy2(RUTA_DB, archivo_backup)
+            except:
+                pass
+            self.db.cerrar()
+            self.root.destroy()
+
+# === PUNTO DE ENTRADA ===
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = GestorGastos(root)
+    root.mainloop()
