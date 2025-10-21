@@ -79,18 +79,66 @@ CUENTAS_DEFAULT = [
     '🏦 Cuenta Ahorro'
 ]
 
-# 100 ICONOS PARA CATEGORÍAS
+# 250+ ICONOS PARA CATEGORÍAS
 ICONOS_CATEGORIAS = [
+    # Comida y bebida
     '🍕', '🍔', '🍟', '🌭', '🍿', '🥗', '🍝', '🍜', '🍲', '🍱',
     '🍛', '🍣', '🍤', '🥘', '🍳', '🥞', '🧇', '🥓', '🍗', '🍖',
+    '🌮', '🌯', '🥙', '🥪', '🍞', '🥖', '🥨', '🧀', '🥚', '🍠',
+    '🥟', '🥠', '🥡', '🍦', '🍧', '🍨', '🍩', '🍪', '🎂', '🍰',
+    '🧁', '🥧', '🍫', '🍬', '🍭', '🍮', '🍯', '🍼', '🥛', '☕',
+    '🍵', '🧃', '🧉', '🍶', '🍾', '🍷', '🍸', '🍹', '🍺', '🍻',
+
+    # Transporte
     '🚗', '🚕', '🚙', '🚌', '🚎', '🏎️', '🚓', '🚑', '🚒', '🚐',
     '🚚', '🚛', '🚜', '🛵', '🏍️', '🚲', '🛴', '✈️', '🚁', '⛵',
+    '🚤', '🛳️', '⛴️', '🛥️', '🚀', '🛸', '🚂', '🚃', '🚄', '🚅',
+    '🚆', '🚇', '🚈', '🚉', '🚊', '🚝', '🚞', '🚟', '🚠', '🚡',
+
+    # Hogar y lugares
     '🏠', '🏡', '🏢', '🏬', '🏭', '🏗️', '🏘️', '🏚️', '🏛️', '⛪',
-    '🛒', '🛍️', '🏪', '🏨', '🏩', '💊', '💉', '🩺', '🩹', '⚕️',
+    '🕌', '🕍', '⛩️', '🏰', '🏯', '🗼', '🗽', '🏟️', '🎡', '🎢',
+    '🎠', '⛱️', '🏖️', '🏝️', '🏜️', '🌋', '⛰️', '🏔️', '🗻', '🏕️',
+
+    # Compras
+    '🛒', '🛍️', '🏪', '🏨', '🏩', '💎', '💍', '👑', '🎁', '🎀',
+    '🎈', '🎏', '🎐', '🧧', '✉️', '📦', '📫', '📪', '📬', '📭',
+
+    # Salud
+    '💊', '💉', '🩺', '🩹', '⚕️', '🏥', '🩻', '🦷', '💪', '🧠',
+    '🫀', '🫁', '🦴', '👁️', '👂', '👃', '🧬', '🔬', '🩸', '🌡️',
+
+    # Entretenimiento
     '🎮', '🎯', '🎲', '🎰', '🎳', '🎾', '⚽', '🏀', '🏈', '⚾',
+    '🥎', '🏐', '🏉', '🥏', '🎱', '🏓', '🏸', '🏒', '🏑', '🥍',
+    '🏏', '⛳', '🏹', '🎣', '🥊', '🥋', '🎽', '🛹', '🛼', '⛸️',
+    '🎿', '🎬', '🎤', '🎧', '🎼', '🎹', '🥁', '🎷', '🎺', '🎸',
+    '🎻', '🎭', '🎨', '🖼️', '🎪', '🎟️', '🎫', '🎖️', '🏆', '🏅',
+
+    # Ropa y accesorios
     '👕', '👔', '👗', '👘', '👙', '👚', '👛', '👜', '👝', '🎒',
+    '👞', '👟', '🥾', '🥿', '👠', '👡', '👢', '👑', '👒', '🎩',
+    '🎓', '🧢', '⛑️', '📿', '🧳', '👓', '🕶️', '🥽', '🧤', '🧣',
+    '🧦', '🧥', '🦺', '🪖', '💄', '💅', '🪮', '🪥', '🪒', '🧴',
+
+    # Tecnología
     '📱', '💻', '⌨️', '🖥️', '🖨️', '🖱️', '💾', '💿', '📀', '🎧',
-    '💰', '💵', '💴', '💶', '💷', '💳', '💸', '🏦', '📊', '📈'
+    '📷', '📹', '🎥', '📞', '☎️', '📟', '📠', '📺', '📻', '🎙️',
+    '⏰', '⏱️', '⏲️', '⌚', '📡', '🔋', '🔌', '💡', '🔦', '🕯️',
+
+    # Dinero y finanzas
+    '💰', '💵', '💴', '💶', '💷', '💳', '💸', '🏦', '📊', '📈',
+    '📉', '💹', '🪙', '💲', '💱', '🧾', '💼', '📝', '📋', '📌',
+
+    # Educación
+    '📚', '📖', '📕', '📗', '📘', '📙', '📓', '📔', '📒', '📃',
+    '📜', '📄', '📰', '🗞️', '📑', '🔖', '🏷️', '✏️', '✒️', '🖊️',
+    '🖋️', '🖍️', '📝', '🎓', '🎒', '📐', '📏', '🧮', '🔬', '🔭',
+
+    # Otros útiles
+    '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '❣️',
+    '⭐', '🌟', '✨', '⚡', '🔥', '💧', '🌊', '🎯', '✅', '❌',
+    '⚠️', '🔔', '🔕', '📢', '📣', '💬', '💭', '🗨️', '🗯️', '💤'
 ]
 
 
@@ -122,7 +170,8 @@ class Database:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 nombre TEXT UNIQUE NOT NULL,
                 color TEXT NOT NULL,
-                icono TEXT DEFAULT '❓'
+                icono TEXT DEFAULT '❓',
+                categoria_padre TEXT DEFAULT NULL
             )
         ''')
         
@@ -204,18 +253,100 @@ class Database:
             )
         ''')
 
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS cuentas_por_pagar (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                categoria TEXT NOT NULL,
+                monto REAL NOT NULL,
+                moneda TEXT DEFAULT 'ARS',
+                dia_vencimiento INTEGER NOT NULL,
+                activa INTEGER DEFAULT 1,
+                ultima_alerta TEXT,
+                notas TEXT
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS alertas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tipo TEXT NOT NULL,
+                mensaje TEXT NOT NULL,
+                fecha TEXT NOT NULL,
+                leida INTEGER DEFAULT 0,
+                nivel TEXT DEFAULT 'info'
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS deudas_compartidas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                monto_total REAL NOT NULL,
+                monto_pagado REAL DEFAULT 0,
+                con_quien TEXT NOT NULL,
+                tipo TEXT NOT NULL,
+                fecha_creacion TEXT NOT NULL,
+                fecha_vencimiento TEXT,
+                saldada INTEGER DEFAULT 0,
+                notas TEXT
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS logros (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT UNIQUE NOT NULL,
+                descripcion TEXT NOT NULL,
+                icono TEXT NOT NULL,
+                desbloqueado INTEGER DEFAULT 0,
+                fecha_desbloqueo TEXT,
+                progreso_actual INTEGER DEFAULT 0,
+                progreso_objetivo INTEGER NOT NULL
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS configuracion (
+                clave TEXT PRIMARY KEY,
+                valor TEXT NOT NULL
+            )
+        ''')
+
         self.conn.commit()
 
     def inicializar_datos(self):
         cursor = self.conn.cursor()
-        
+
         for nombre, color in CATEGORIAS_DEFAULT:
             cursor.execute('INSERT OR IGNORE INTO categorias (nombre, color) VALUES (?, ?)', (nombre, color))
-        
+
         for cuenta in CUENTAS_DEFAULT:
             tipo = 'USD' if 'USD' in cuenta else 'ARS'
             cursor.execute('INSERT OR IGNORE INTO cuentas (nombre, tipo) VALUES (?, ?)', (cuenta, tipo))
-        
+
+        # Configuración por defecto
+        cursor.execute('INSERT OR IGNORE INTO configuracion (clave, valor) VALUES (?, ?)', ('gamificacion_activa', 'true'))
+        cursor.execute('INSERT OR IGNORE INTO configuracion (clave, valor) VALUES (?, ?)', ('alertas_activas', 'true'))
+
+        # Logros iniciales
+        logros_default = [
+            ('🎯 Primer Paso', 'Registrá tu primer gasto', '🎯', 1),
+            ('📊 Organizador', 'Registrá 10 gastos', '📊', 10),
+            ('💪 Constante', 'Registrá gastos por 7 días seguidos', '💪', 7),
+            ('🍕 Sin Delivery', 'Pasá 7 días sin gastar en delivery', '🍕', 7),
+            ('💰 Ahorrador', 'Ahorrá el 20% de tus ingresos', '💰', 20),
+            ('📈 Analista', 'Consultá el dashboard 30 veces', '📈', 30),
+            ('🎮 Maestro', 'Desbloqueá 5 logros', '🎮', 5),
+            ('⭐ Leyenda', 'Desbloqueá todos los logros', '⭐', 10)
+        ]
+
+        for nombre, desc, icono, objetivo in logros_default:
+            cursor.execute('''
+                INSERT OR IGNORE INTO logros (nombre, descripcion, icono, progreso_objetivo)
+                VALUES (?, ?, ?, ?)
+            ''', (nombre, desc, icono, objetivo))
+
         self.conn.commit()
 
     def agregar_gasto(self, fecha, categoria, monto, moneda, descripcion, cuenta, notas=''):
@@ -368,8 +499,311 @@ class Database:
         cursor.execute('SELECT tag FROM tags WHERE gasto_id=?', (gasto_id,))
         return [t[0] for t in cursor.fetchall()]
 
+    # === CUENTAS POR PAGAR ===
+    def agregar_cuenta_por_pagar(self, nombre, categoria, monto, moneda, dia_venc, notas=''):
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT INTO cuentas_por_pagar (nombre, categoria, monto, moneda, dia_vencimiento, notas)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (nombre, categoria, monto, moneda, dia_venc, notas))
+        self.conn.commit()
+
+    def obtener_cuentas_por_pagar(self):
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT * FROM cuentas_por_pagar WHERE activa=1 ORDER BY dia_vencimiento')
+        return cursor.fetchall()
+
+    def verificar_vencimientos(self):
+        """Verifica vencimientos próximos y crea alertas"""
+        cursor = self.conn.cursor()
+        hoy = datetime.date.today()
+        dia_actual = hoy.day
+
+        cuentas = self.obtener_cuentas_por_pagar()
+        for cuenta in cuentas:
+            id_cuenta, nombre, cat, monto, moneda, dia_venc, activa, ultima_alerta = cuenta[:8]
+
+            dias_para_venc = dia_venc - dia_actual
+            if dias_para_venc <= 3 and dias_para_venc >= 0:
+                # Verificar si ya se alertó este mes
+                if ultima_alerta != hoy.strftime('%Y-%m'):
+                    mensaje = f"⚠️ Vence {nombre}: ${monto:,.0f} {moneda} en {dias_para_venc} día(s)"
+                    self.crear_alerta('vencimiento', mensaje, 'warning')
+                    cursor.execute('UPDATE cuentas_por_pagar SET ultima_alerta=? WHERE id=?',
+                                 (hoy.strftime('%Y-%m'), id_cuenta))
+
+        self.conn.commit()
+
+    # === ALERTAS ===
+    def crear_alerta(self, tipo, mensaje, nivel='info'):
+        cursor = self.conn.cursor()
+        fecha = datetime.date.today().isoformat()
+        cursor.execute('''
+            INSERT INTO alertas (tipo, mensaje, fecha, nivel)
+            VALUES (?, ?, ?, ?)
+        ''', (tipo, mensaje, fecha, nivel))
+        self.conn.commit()
+
+    def obtener_alertas(self, solo_no_leidas=True):
+        cursor = self.conn.cursor()
+        if solo_no_leidas:
+            cursor.execute('SELECT * FROM alertas WHERE leida=0 ORDER BY fecha DESC LIMIT 10')
+        else:
+            cursor.execute('SELECT * FROM alertas ORDER BY fecha DESC LIMIT 50')
+        return cursor.fetchall()
+
+    def marcar_alerta_leida(self, id_alerta):
+        cursor = self.conn.cursor()
+        cursor.execute('UPDATE alertas SET leida=1 WHERE id=?', (id_alerta,))
+        self.conn.commit()
+
+    def verificar_presupuestos(self, mes):
+        """Verifica si algún presupuesto está cerca del límite"""
+        presupuestos = self.obtener_todos_presupuestos(mes)
+        gastos = self.obtener_gastos(mes)
+
+        for pres in presupuestos:
+            id_pres, categoria, mes_pres, limite = pres
+            gasto_actual = sum(g[3] for g in gastos if g[2] == categoria and g[4] == 'ARS')
+
+            pct = (gasto_actual / limite * 100) if limite > 0 else 0
+
+            if pct >= 90 and pct < 100:
+                mensaje = f"⚠️ Presupuesto '{categoria}' al {pct:.0f}%: ${gasto_actual:,.0f} de ${limite:,.0f}"
+                self.crear_alerta('presupuesto', mensaje, 'warning')
+            elif pct >= 100:
+                mensaje = f"🚨 ¡Presupuesto '{categoria}' excedido! {pct:.0f}%: ${gasto_actual:,.0f} de ${limite:,.0f}"
+                self.crear_alerta('presupuesto', mensaje, 'danger')
+
+    def verificar_gastos_inusuales(self, mes):
+        """Detecta incrementos inusuales en categorías"""
+        import calendar
+
+        hoy = datetime.date.today()
+        mes_anterior = (hoy.replace(day=1) - timedelta(days=1)).strftime('%Y-%m')
+
+        gastos_actual = self.obtener_gastos(mes)
+        gastos_anterior = self.obtener_gastos(mes_anterior)
+
+        categorias = set([g[2] for g in gastos_actual])
+
+        for cat in categorias:
+            total_actual = sum(g[3] for g in gastos_actual if g[2] == cat and g[4] == 'ARS')
+            total_anterior = sum(g[3] for g in gastos_anterior if g[2] == cat and g[4] == 'ARS')
+
+            if total_anterior > 0:
+                incremento = ((total_actual - total_anterior) / total_anterior) * 100
+
+                if incremento >= 25:
+                    mensaje = f"📊 Gasto en '{cat}' aumentó +{incremento:.0f}% este mes (${total_actual:,.0f} vs ${total_anterior:,.0f})"
+                    self.crear_alerta('anomalia', mensaje, 'info')
+
+    # === DEUDAS COMPARTIDAS ===
+    def agregar_deuda(self, nombre, monto_total, con_quien, tipo, fecha_venc=None, notas=''):
+        cursor = self.conn.cursor()
+        fecha_creacion = datetime.date.today().isoformat()
+        cursor.execute('''
+            INSERT INTO deudas_compartidas (nombre, monto_total, con_quien, tipo, fecha_creacion, fecha_vencimiento, notas)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (nombre, monto_total, con_quien, tipo, fecha_creacion, fecha_venc, notas))
+        self.conn.commit()
+
+    def obtener_deudas(self, saldadas=False):
+        cursor = self.conn.cursor()
+        if saldadas:
+            cursor.execute('SELECT * FROM deudas_compartidas ORDER BY fecha_creacion DESC')
+        else:
+            cursor.execute('SELECT * FROM deudas_compartidas WHERE saldada=0 ORDER BY fecha_creacion DESC')
+        return cursor.fetchall()
+
+    def actualizar_pago_deuda(self, id_deuda, monto_pago):
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT monto_total, monto_pagado FROM deudas_compartidas WHERE id=?', (id_deuda,))
+        deuda = cursor.fetchone()
+        if deuda:
+            total, pagado = deuda
+            nuevo_pagado = pagado + monto_pago
+            saldada = 1 if nuevo_pagado >= total else 0
+
+            cursor.execute('UPDATE deudas_compartidas SET monto_pagado=?, saldada=? WHERE id=?',
+                         (nuevo_pagado, saldada, id_deuda))
+            self.conn.commit()
+
+    # === GAMIFICACIÓN ===
+    def obtener_config(self, clave):
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT valor FROM configuracion WHERE clave=?', (clave,))
+        res = cursor.fetchone()
+        return res[0] if res else None
+
+    def actualizar_config(self, clave, valor):
+        cursor = self.conn.cursor()
+        cursor.execute('INSERT OR REPLACE INTO configuracion (clave, valor) VALUES (?, ?)', (clave, valor))
+        self.conn.commit()
+
+    def obtener_logros(self):
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT * FROM logros ORDER BY desbloqueado DESC, id')
+        return cursor.fetchall()
+
+    def verificar_logros(self):
+        """Verifica y desbloquea logros automáticamente"""
+        if self.obtener_config('gamificacion_activa') != 'true':
+            return
+
+        cursor = self.conn.cursor()
+
+        # Logro: Primer Paso
+        total_gastos = len(self.obtener_gastos())
+        if total_gastos >= 1:
+            self.actualizar_progreso_logro('🎯 Primer Paso', 1)
+
+        # Logro: Organizador
+        if total_gastos >= 10:
+            self.actualizar_progreso_logro('📊 Organizador', total_gastos)
+
+        # Logro: Constante (7 días seguidos)
+        gastos = self.obtener_gastos()
+        if gastos:
+            fechas = sorted(set([g[1] for g in gastos]))
+            racha = 1
+            max_racha = 1
+            for i in range(1, len(fechas)):
+                fecha_ant = datetime.datetime.strptime(fechas[i-1], '%Y-%m-%d').date()
+                fecha_act = datetime.datetime.strptime(fechas[i], '%Y-%m-%d').date()
+                if (fecha_act - fecha_ant).days == 1:
+                    racha += 1
+                    max_racha = max(max_racha, racha)
+                else:
+                    racha = 1
+            if max_racha >= 7:
+                self.actualizar_progreso_logro('💪 Constante', max_racha)
+
+        # Verificar logros desbloqueados
+        cursor.execute('SELECT COUNT(*) FROM logros WHERE desbloqueado=1')
+        total_desbloqueados = cursor.fetchone()[0]
+        if total_desbloqueados >= 5:
+            self.actualizar_progreso_logro('🎮 Maestro', total_desbloqueados)
+
+    def actualizar_progreso_logro(self, nombre, progreso):
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT id, progreso_objetivo, desbloqueado FROM logros WHERE nombre=?', (nombre,))
+        logro = cursor.fetchone()
+
+        if logro:
+            id_logro, objetivo, desbloqueado = logro
+            if not desbloqueado and progreso >= objetivo:
+                fecha = datetime.date.today().isoformat()
+                cursor.execute('''
+                    UPDATE logros SET desbloqueado=1, fecha_desbloqueo=?, progreso_actual=?
+                    WHERE id=?
+                ''', (fecha, progreso, id_logro))
+                self.conn.commit()
+
+                # Crear alerta de logro desbloqueado
+                self.crear_alerta('logro', f'🎉 ¡Logro desbloqueado! {nombre}', 'success')
+            else:
+                cursor.execute('UPDATE logros SET progreso_actual=? WHERE id=?', (progreso, id_logro))
+                self.conn.commit()
+
     def cerrar(self):
         self.conn.close()
+
+
+# === PARSER DE TEXTO LIBRE ===
+def parsear_gasto_texto(texto, categorias_disponibles):
+    """
+    Parsea texto libre para extraer información de gasto
+    Ejemplos:
+    - "Gasto 2000 en supermercado"
+    - "Pagué 1500 de comida"
+    - "500 pesos en café"
+    - "Almuerzo $350"
+    """
+    import re
+
+    # Limpiar texto
+    texto = texto.lower().strip()
+
+    # Extraer monto
+    monto = None
+    patrones_monto = [
+        r'\$\s*(\d+[\.,]?\d*)',  # $2000 o $2.000
+        r'(\d+[\.,]?\d*)\s*pesos',  # 2000 pesos
+        r'(\d+[\.,]?\d*)\s*ars',  # 2000 ars
+        r'(\d+[\.,]?\d*)\s*(en|de|por)',  # 2000 en/de/por
+        r'(gasto|pagué|pague|gasté|gaste|compré|compre)\s*(\d+[\.,]?\d*)',  # gasté 2000
+    ]
+
+    for patron in patrones_monto:
+        match = re.search(patron, texto)
+        if match:
+            # Obtener el grupo numérico
+            grupos = match.groups()
+            for grupo in grupos:
+                if grupo and re.match(r'\d+', str(grupo)):
+                    monto = float(str(grupo).replace('.', '').replace(',', '.'))
+                    break
+            if monto:
+                break
+
+    # Si no encontró monto, buscar cualquier número
+    if not monto:
+        match = re.search(r'(\d+[\.,]?\d*)', texto)
+        if match:
+            monto = float(match.group(1).replace('.', '').replace(',', '.'))
+
+    # Extraer categoría
+    categoria = None
+    palabras_clave = {
+        'comida': ['comida', 'almuerzo', 'cena', 'desayuno', 'merienda', 'restaurante', 'resto', 'comí', 'comi'],
+        'supermercado': ['supermercado', 'super', 'mercado', 'compras'],
+        'transporte': ['transporte', 'colectivo', 'bondi', 'taxi', 'uber', 'subte', 'tren', 'nafta', 'combustible'],
+        'café': ['café', 'cafeteria', 'bar'],
+        'delivery': ['delivery', 'pedidos', 'pedidosya', 'rappi'],
+        'entretenimiento': ['cine', 'película', 'pelicula', 'juego', 'entretenimiento', 'salida'],
+        'salud': ['salud', 'farmacia', 'médico', 'medico', 'doctor', 'remedio'],
+        'ropa': ['ropa', 'zapatillas', 'zapatos', 'camisa', 'pantalón', 'pantalon', 'vestido'],
+        'hogar': ['hogar', 'casa', 'alquiler', 'expensas', 'luz', 'gas', 'agua', 'internet'],
+        'tecnología': ['tecnología', 'tecnologia', 'celular', 'computadora', 'notebook', 'auriculares']
+    }
+
+    for cat, palabras in palabras_clave.items():
+        for palabra in palabras:
+            if palabra in texto:
+                # Buscar en categorías disponibles
+                for cat_disp in categorias_disponibles:
+                    if cat.lower() in cat_disp.lower() or palabra.lower() in cat_disp.lower():
+                        categoria = cat_disp
+                        break
+                if categoria:
+                    break
+        if categoria:
+            break
+
+    # Si no encontró categoría, usar la primera disponible o "Otros"
+    if not categoria:
+        for cat_disp in categorias_disponibles:
+            if 'otro' in cat_disp.lower():
+                categoria = cat_disp
+                break
+        if not categoria and categorias_disponibles:
+            categoria = categorias_disponibles[0]
+
+    # Extraer descripción (usar el texto original sin el monto)
+    descripcion = texto
+    if monto:
+        # Remover el monto del texto para dejarlo como descripción
+        descripcion = re.sub(r'\$?\s*' + str(int(monto)) + r'[\.,]?\d*\s*(pesos|ars)?', '', texto).strip()
+        descripcion = re.sub(r'(gasto|pagué|pague|gasté|gaste|compré|compre)\s*', '', descripcion).strip()
+        descripcion = re.sub(r'\s+(en|de|por)\s+', ' ', descripcion).strip()
+
+    return {
+        'monto': monto if monto else 0,
+        'categoria': categoria,
+        'descripcion': descripcion if descripcion else 'Gasto',
+        'confianza': 1.0 if (monto and categoria) else 0.5
+    }
 
 
 # === COTIZACIONES ===
@@ -448,6 +882,10 @@ class GestorGastos:
 
         self.centrar_ventana()
         self.db.ejecutar_recurrentes()  # Ejecutar transacciones recurrentes al inicio
+        self.db.verificar_vencimientos()  # Verificar vencimientos
+        self.db.verificar_presupuestos(self.mes_actual)  # Verificar presupuestos
+        self.db.verificar_gastos_inusuales(self.mes_actual)  # Detectar gastos inusuales
+        self.db.verificar_logros()  # Verificar logros
         self.crear_interfaz()
         self.actualizar_cotizaciones()
         self.root.protocol("WM_DELETE_WINDOW", self.al_cerrar)
@@ -535,11 +973,16 @@ class GestorGastos:
         # Botones de navegación
         nav_buttons = [
             ("📊 Dashboard", 'dashboard', self.mostrar_dashboard),
+            ("⚡ Registro Rápido", 'registro_rapido', self.ventana_registro_rapido),
             ("📋 Gastos", 'gastos', self.mostrar_gastos),
+            ("🔔 Alertas", 'alertas', self.mostrar_alertas),
+            ("📅 Cuentas por Pagar", 'cuentas_pagar', self.mostrar_cuentas_por_pagar),
+            ("👥 Deudas Compartidas", 'deudas', self.mostrar_deudas),
             ("🎯 Metas de Ahorro", 'metas', self.mostrar_metas),
             ("💳 Tarjetas", 'tarjetas', self.mostrar_tarjetas),
             ("🔄 Recurrentes", 'recurrentes', self.mostrar_recurrentes),
             ("📊 Presupuestos", 'presupuestos', self.mostrar_presupuestos),
+            ("🎮 Logros", 'logros', self.mostrar_logros),
             ("💱 Conversor", 'conversor', self.ventana_conversor),
         ]
 
@@ -587,8 +1030,8 @@ class GestorGastos:
 
     def cambiar_vista(self, vista, comando):
         """Cambia la vista actual y actualiza el sidebar"""
-        if vista == 'conversor':
-            comando()  # Conversor es ventana modal
+        if vista in ['conversor', 'registro_rapido']:
+            comando()  # Estas son ventanas modales
             return
 
         self.vista_actual = vista
@@ -1381,6 +1824,517 @@ class GestorGastos:
                  fg='white', font=('Segoe UI', 10), relief=tk.FLAT, cursor='hand2',
                  padx=25, pady=8).pack(side=tk.LEFT, padx=5)
 
+    def mostrar_alertas(self):
+        """Vista de alertas inteligentes"""
+        frame_btn = tk.Frame(self.frame_contenido, bg=COLORES['background'])
+        frame_btn.pack(fill=tk.X, padx=15, pady=10)
+
+        tk.Label(
+            frame_btn,
+            text="🔔 Alertas y Notificaciones",
+            font=('Segoe UI', 14, 'bold'),
+            bg=COLORES['background']
+        ).pack(side=tk.LEFT)
+
+        canvas = tk.Canvas(self.frame_contenido, bg=COLORES['background'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(self.frame_contenido, orient="vertical", command=canvas.yview)
+
+        frame_lista = tk.Frame(canvas, bg=COLORES['background'])
+        frame_lista.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+        canvas.create_window((0, 0), window=frame_lista, anchor="nw", width=1100)
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True, padx=15)
+        scrollbar.pack(side="right", fill="y")
+
+        alertas = self.db.obtener_alertas(solo_no_leidas=False)
+
+        if not alertas:
+            tk.Label(
+                frame_lista,
+                text="✅ No hay alertas nuevas\n\n¡Todo bajo control!",
+                font=('Segoe UI', 11),
+                bg=COLORES['background'],
+                fg=COLORES['text_secondary'],
+                justify=tk.CENTER
+            ).pack(pady=60)
+            return
+
+        for alerta in alertas:
+            id_alerta, tipo, mensaje, fecha, leida, nivel = alerta
+
+            color = {
+                'success': COLORES['success'],
+                'warning': COLORES['warning'],
+                'danger': COLORES['danger'],
+                'info': COLORES['info']
+            }.get(nivel, COLORES['info'])
+
+            frame = tk.Frame(frame_lista, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+            frame.pack(fill=tk.X, pady=5, padx=5)
+
+            if not leida:
+                tk.Frame(frame, bg=color, width=6).pack(side=tk.LEFT, fill=tk.Y)
+
+            frame_contenido = tk.Frame(frame, bg=COLORES['card_bg'])
+            frame_contenido.pack(fill=tk.X, padx=15, pady=10)
+
+            tk.Label(
+                frame_contenido,
+                text=mensaje,
+                font=('Segoe UI', 10, 'bold' if not leida else 'normal'),
+                bg=COLORES['card_bg'],
+                fg=COLORES['text'] if not leida else COLORES['text_secondary']
+            ).pack(anchor='w', pady=3)
+
+            tk.Label(
+                frame_contenido,
+                text=f"📅 {fecha}",
+                font=('Segoe UI', 8),
+                bg=COLORES['card_bg'],
+                fg=COLORES['text_secondary']
+            ).pack(anchor='w')
+
+    def mostrar_cuentas_por_pagar(self):
+        """Vista de cuentas por pagar con vencimientos"""
+        frame_btn = tk.Frame(self.frame_contenido, bg=COLORES['background'])
+        frame_btn.pack(fill=tk.X, padx=15, pady=10)
+
+        tk.Button(
+            frame_btn,
+            text="➕ Nueva Cuenta por Pagar",
+            font=('Segoe UI', 10, 'bold'),
+            bg=COLORES['success'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=self.ventana_nueva_cuenta_pagar,
+            padx=15,
+            pady=8
+        ).pack(side=tk.LEFT)
+
+        canvas = tk.Canvas(self.frame_contenido, bg=COLORES['background'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(self.frame_contenido, orient="vertical", command=canvas.yview)
+
+        frame_lista = tk.Frame(canvas, bg=COLORES['background'])
+        frame_lista.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+        canvas.create_window((0, 0), window=frame_lista, anchor="nw", width=1100)
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True, padx=15)
+        scrollbar.pack(side="right", fill="y")
+
+        cuentas = self.db.obtener_cuentas_por_pagar()
+
+        if not cuentas:
+            tk.Label(
+                frame_lista,
+                text="📅 No hay cuentas por pagar configuradas\n\nAgregá tus servicios mensuales (luz, gas, internet, etc.)",
+                font=('Segoe UI', 11),
+                bg=COLORES['background'],
+                fg=COLORES['text_secondary'],
+                justify=tk.CENTER
+            ).pack(pady=60)
+            return
+
+        hoy = datetime.date.today()
+        for cuenta in cuentas:
+            id_c, nombre, cat, monto, moneda, dia_venc = cuenta[:6]
+
+            frame = tk.Frame(frame_lista, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+            frame.pack(fill=tk.X, pady=5, padx=5)
+
+            dias_faltantes = dia_venc - hoy.day
+            if dias_faltantes < 0:
+                dias_faltantes += 30
+
+            if dias_faltantes <= 3:
+                color = COLORES['danger']
+                estado = "⚠️ VENCE PRONTO"
+            elif dias_faltantes <= 7:
+                color = COLORES['warning']
+                estado = "⏰ Próximo vencimiento"
+            else:
+                color = COLORES['success']
+                estado = "✅ Al día"
+
+            frame_header = tk.Frame(frame, bg=color, height=35)
+            frame_header.pack(fill=tk.X)
+            frame_header.pack_propagate(False)
+
+            tk.Label(
+                frame_header,
+                text=f"📅 {nombre}",
+                font=('Segoe UI', 11, 'bold'),
+                bg=color,
+                fg='white'
+            ).pack(side=tk.LEFT, padx=15, pady=7)
+
+            tk.Label(
+                frame_header,
+                text=estado,
+                font=('Segoe UI', 9),
+                bg=color,
+                fg='white'
+            ).pack(side=tk.RIGHT, padx=15)
+
+            frame_contenido = tk.Frame(frame, bg=COLORES['card_bg'])
+            frame_contenido.pack(fill=tk.X, padx=15, pady=10)
+
+            info = f"💰 {moneda} ${monto:,.0f} | 📂 {cat} | 📆 Vence día {dia_venc} ({dias_faltantes} días)"
+            tk.Label(
+                frame_contenido,
+                text=info,
+                font=('Segoe UI', 10),
+                bg=COLORES['card_bg']
+            ).pack(anchor='w', pady=3)
+
+    def ventana_nueva_cuenta_pagar(self):
+        """Ventana para agregar cuenta por pagar"""
+        v = tk.Toplevel(self.root)
+        v.title("📅 Nueva Cuenta por Pagar")
+        v.geometry("450x500")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+        v.grab_set()
+
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (450 // 2)
+        y = (v.winfo_screenheight() // 2) - (500 // 2)
+        v.geometry(f'450x500+{x}+{y}')
+
+        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(frame, text="📝 Nombre (ej: Luz, Gas, Internet):", bg=COLORES['background']).pack(anchor='w', pady=3)
+        entry_nombre = tk.Entry(frame)
+        entry_nombre.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="📂 Categoría:", bg=COLORES['background']).pack(anchor='w', pady=3)
+        combo_cat = ttk.Combobox(frame, values=[c[1] for c in self.db.obtener_categorias()], state='readonly')
+        if self.db.obtener_categorias():
+            combo_cat.set(self.db.obtener_categorias()[0][1])
+        combo_cat.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="💰 Monto:", bg=COLORES['background']).pack(anchor='w', pady=3)
+        entry_monto = tk.Entry(frame)
+        entry_monto.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="💱 Moneda:", bg=COLORES['background']).pack(anchor='w', pady=3)
+        combo_moneda = ttk.Combobox(frame, values=['ARS', 'USD'], state='readonly')
+        combo_moneda.set('ARS')
+        combo_moneda.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="📆 Día de vencimiento (1-31):", bg=COLORES['background']).pack(anchor='w', pady=3)
+        entry_dia = tk.Entry(frame)
+        entry_dia.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="🗒️ Notas:", bg=COLORES['background']).pack(anchor='w', pady=3)
+        entry_notas = tk.Text(frame, height=3)
+        entry_notas.pack(fill=tk.X, pady=3)
+
+        def guardar():
+            try:
+                nombre = entry_nombre.get().strip()
+                categoria = combo_cat.get()
+                monto = float(entry_monto.get().replace(',', '.'))
+                moneda = combo_moneda.get()
+                dia = int(entry_dia.get())
+                notas = entry_notas.get('1.0', tk.END).strip()
+
+                if not nombre or not categoria or monto <= 0:
+                    messagebox.showwarning("Error", "Completá todos los campos correctamente")
+                    return
+
+                if dia < 1 or dia > 31:
+                    messagebox.showwarning("Error", "El día debe estar entre 1 y 31")
+                    return
+
+                self.db.agregar_cuenta_por_pagar(nombre, categoria, monto, moneda, dia, notas)
+                messagebox.showinfo("Éxito", "✅ Cuenta por pagar agregada")
+                v.destroy()
+                self.mostrar_cuentas_por_pagar()
+            except ValueError:
+                messagebox.showerror("Error", "Datos inválidos")
+
+        frame_btns = tk.Frame(frame, bg=COLORES['background'])
+        frame_btns.pack(pady=15)
+
+        tk.Button(frame_btns, text="💾 Guardar", command=guardar, bg=COLORES['success'],
+                 fg='white', font=('Segoe UI', 10, 'bold'), relief=tk.FLAT, cursor='hand2',
+                 padx=25, pady=8).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(frame_btns, text="❌ Cancelar", command=v.destroy, bg=COLORES['danger'],
+                 fg='white', font=('Segoe UI', 10), relief=tk.FLAT, cursor='hand2',
+                 padx=25, pady=8).pack(side=tk.LEFT, padx=5)
+
+    def mostrar_deudas(self):
+        """Vista de deudas compartidas"""
+        frame_btn = tk.Frame(self.frame_contenido, bg=COLORES['background'])
+        frame_btn.pack(fill=tk.X, padx=15, pady=10)
+
+        tk.Button(
+            frame_btn,
+            text="➕ Nueva Deuda",
+            font=('Segoe UI', 10, 'bold'),
+            bg=COLORES['success'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=self.ventana_nueva_deuda,
+            padx=15,
+            pady=8
+        ).pack(side=tk.LEFT)
+
+        canvas = tk.Canvas(self.frame_contenido, bg=COLORES['background'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(self.frame_contenido, orient="vertical", command=canvas.yview)
+
+        frame_lista = tk.Frame(canvas, bg=COLORES['background'])
+        frame_lista.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+        canvas.create_window((0, 0), window=frame_lista, anchor="nw", width=1100)
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True, padx=15)
+        scrollbar.pack(side="right", fill="y")
+
+        deudas = self.db.obtener_deudas()
+
+        if not deudas:
+            tk.Label(
+                frame_lista,
+                text="👥 No hay deudas registradas\n\nGestioná préstamos y gastos compartidos",
+                font=('Segoe UI', 11),
+                bg=COLORES['background'],
+                fg=COLORES['text_secondary'],
+                justify=tk.CENTER
+            ).pack(pady=60)
+            return
+
+        for deuda in deudas:
+            id_d, nombre, total, pagado, con_quien, tipo = deuda[:6]
+
+            frame = tk.Frame(frame_lista, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+            frame.pack(fill=tk.X, pady=5, padx=5)
+
+            pct = (pagado / total * 100) if total > 0 else 0
+            color = COLORES['success'] if pct >= 100 else COLORES['warning'] if pct >= 50 else COLORES['info']
+
+            frame_header = tk.Frame(frame, bg=color, height=35)
+            frame_header.pack(fill=tk.X)
+            frame_header.pack_propagate(False)
+
+            icono = "💸" if tipo == "debo" else "💰"
+            tk.Label(
+                frame_header,
+                text=f"{icono} {nombre}",
+                font=('Segoe UI', 11, 'bold'),
+                bg=color,
+                fg='white'
+            ).pack(side=tk.LEFT, padx=15, pady=7)
+
+            tk.Label(
+                frame_header,
+                text=f"Con: {con_quien}",
+                font=('Segoe UI', 9),
+                bg=color,
+                fg='white'
+            ).pack(side=tk.RIGHT, padx=15)
+
+            frame_contenido = tk.Frame(frame, bg=COLORES['card_bg'])
+            frame_contenido.pack(fill=tk.X, padx=15, pady=10)
+
+            tk.Label(
+                frame_contenido,
+                text=f"${pagado:,.0f} de ${total:,.0f} ({pct:.0f}%)",
+                font=('Segoe UI', 10),
+                bg=COLORES['card_bg']
+            ).pack(anchor='w', pady=3)
+
+    def ventana_nueva_deuda(self):
+        """Ventana para crear deuda"""
+        v = tk.Toplevel(self.root)
+        v.title("👥 Nueva Deuda Compartida")
+        v.geometry("450x500")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+        v.grab_set()
+
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (450 // 2)
+        y = (v.winfo_screenheight() // 2) - (500 // 2)
+        v.geometry(f'450x500+{x}+{y}')
+
+        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(frame, text="📝 Descripción:", bg=COLORES['background']).pack(anchor='w', pady=3)
+        entry_nombre = tk.Entry(frame)
+        entry_nombre.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="💰 Monto total:", bg=COLORES['background']).pack(anchor='w', pady=3)
+        entry_monto = tk.Entry(frame)
+        entry_monto.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="👤 Con quién:", bg=COLORES['background']).pack(anchor='w', pady=3)
+        entry_quien = tk.Entry(frame)
+        entry_quien.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="📊 Tipo:", bg=COLORES['background']).pack(anchor='w', pady=3)
+        combo_tipo = ttk.Combobox(frame, values=['Me deben', 'Debo'], state='readonly')
+        combo_tipo.set('Me deben')
+        combo_tipo.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="🗒️ Notas:", bg=COLORES['background']).pack(anchor='w', pady=3)
+        entry_notas = tk.Text(frame, height=3)
+        entry_notas.pack(fill=tk.X, pady=3)
+
+        def guardar():
+            try:
+                nombre = entry_nombre.get().strip()
+                monto = float(entry_monto.get().replace(',', '.'))
+                con_quien = entry_quien.get().strip()
+                tipo = "debo" if combo_tipo.get() == "Debo" else "me_deben"
+                notas = entry_notas.get('1.0', tk.END).strip()
+
+                if not nombre or not con_quien or monto <= 0:
+                    messagebox.showwarning("Error", "Completá todos los campos correctamente")
+                    return
+
+                self.db.agregar_deuda(nombre, monto, con_quien, tipo, None, notas)
+                messagebox.showinfo("Éxito", "✅ Deuda registrada")
+                v.destroy()
+                self.mostrar_deudas()
+            except ValueError:
+                messagebox.showerror("Error", "Datos inválidos")
+
+        frame_btns = tk.Frame(frame, bg=COLORES['background'])
+        frame_btns.pack(pady=15)
+
+        tk.Button(frame_btns, text="💾 Guardar", command=guardar, bg=COLORES['success'],
+                 fg='white', font=('Segoe UI', 10, 'bold'), relief=tk.FLAT, cursor='hand2',
+                 padx=25, pady=8).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(frame_btns, text="❌ Cancelar", command=v.destroy, bg=COLORES['danger'],
+                 fg='white', font=('Segoe UI', 10), relief=tk.FLAT, cursor='hand2',
+                 padx=25, pady=8).pack(side=tk.LEFT, padx=5)
+
+    def mostrar_logros(self):
+        """Vista de gamificación con logros"""
+        # Header con toggle de gamificación
+        frame_header = tk.Frame(self.frame_contenido, bg=COLORES['background'])
+        frame_header.pack(fill=tk.X, padx=15, pady=10)
+
+        tk.Label(
+            frame_header,
+            text="🎮 Logros y Desafíos",
+            font=('Segoe UI', 14, 'bold'),
+            bg=COLORES['background']
+        ).pack(side=tk.LEFT)
+
+        gamificacion_activa = self.db.obtener_config('gamificacion_activa') == 'true'
+
+        def toggle_gamificacion():
+            nuevo_estado = 'false' if gamificacion_activa else 'true'
+            self.db.actualizar_config('gamificacion_activa', nuevo_estado)
+            messagebox.showinfo("Configuración",
+                              f"Gamificación {'activada' if nuevo_estado == 'true' else 'desactivada'}")
+            self.mostrar_logros()
+
+        tk.Button(
+            frame_header,
+            text="⚙️ " + ("Desactivar" if gamificacion_activa else "Activar"),
+            command=toggle_gamificacion,
+            bg=COLORES['secondary'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=15,
+            pady=6
+        ).pack(side=tk.RIGHT)
+
+        if not gamificacion_activa:
+            tk.Label(
+                self.frame_contenido,
+                text="🎮 Gamificación desactivada\n\nActivala para desbloquear logros y desafíos",
+                font=('Segoe UI', 11),
+                bg=COLORES['background'],
+                fg=COLORES['text_secondary'],
+                justify=tk.CENTER
+            ).pack(pady=60)
+            return
+
+        canvas = tk.Canvas(self.frame_contenido, bg=COLORES['background'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(self.frame_contenido, orient="vertical", command=canvas.yview)
+
+        frame_lista = tk.Frame(canvas, bg=COLORES['background'])
+        frame_lista.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+        canvas.create_window((0, 0), window=frame_lista, anchor="nw", width=1100)
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True, padx=15)
+        scrollbar.pack(side="right", fill="y")
+
+        logros = self.db.obtener_logros()
+
+        for logro in logros:
+            id_l, nombre, desc, icono, desbloqueado, fecha_desb, progreso, objetivo = logro
+
+            frame = tk.Frame(frame_lista, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+            frame.pack(fill=tk.X, pady=5, padx=5)
+
+            if desbloqueado:
+                color = COLORES['success']
+                estado = f"✅ Desbloqueado - {fecha_desb}"
+            else:
+                color = COLORES['text_secondary']
+                estado = f"🔒 Bloqueado - Progreso: {progreso}/{objetivo}"
+
+            frame_header = tk.Frame(frame, bg=color if desbloqueado else COLORES['light'], height=35)
+            frame_header.pack(fill=tk.X)
+            frame_header.pack_propagate(False)
+
+            tk.Label(
+                frame_header,
+                text=f"{icono} {nombre}",
+                font=('Segoe UI', 11, 'bold'),
+                bg=color if desbloqueado else COLORES['light'],
+                fg='white' if desbloqueado else COLORES['text']
+            ).pack(side=tk.LEFT, padx=15, pady=7)
+
+            frame_contenido = tk.Frame(frame, bg=COLORES['card_bg'])
+            frame_contenido.pack(fill=tk.X, padx=15, pady=10)
+
+            tk.Label(
+                frame_contenido,
+                text=desc,
+                font=('Segoe UI', 10),
+                bg=COLORES['card_bg']
+            ).pack(anchor='w', pady=3)
+
+            tk.Label(
+                frame_contenido,
+                text=estado,
+                font=('Segoe UI', 8),
+                bg=COLORES['card_bg'],
+                fg=COLORES['text_secondary']
+            ).pack(anchor='w')
+
+            # Barra de progreso si no está desbloqueado
+            if not desbloqueado and objetivo > 0:
+                canvas_barra = tk.Canvas(frame_contenido, height=15, bg=COLORES['background'], highlightthickness=0)
+                canvas_barra.pack(fill=tk.X, pady=5)
+
+                ancho = 1000
+                pct = min((progreso / objetivo) * 100, 100)
+                canvas_barra.create_rectangle(0, 0, ancho, 15, fill=COLORES['light'], outline='')
+                if pct > 0:
+                    ancho_prog = int(ancho * (pct / 100))
+                    canvas_barra.create_rectangle(0, 0, ancho_prog, 15, fill=COLORES['info'], outline='')
+
     def ventana_conversor(self):
         """Ventana de conversor de monedas múltiples"""
         v = tk.Toplevel(self.root)
@@ -1498,6 +2452,148 @@ class GestorGastos:
         
         # Cargar tasas al abrir
         v.after(100, convertir)
+
+    def ventana_registro_rapido(self):
+        """Ventana de registro rápido con texto libre"""
+        v = tk.Toplevel(self.root)
+        v.title("⚡ Registro Rápido de Gasto")
+        v.geometry("550x500")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+        v.grab_set()
+
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (550 // 2)
+        y = (v.winfo_screenheight() // 2) - (500 // 2)
+        v.geometry(f'550x500+{x}+{y}')
+
+        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(
+            frame,
+            text="⚡ Registro Rápido - Escribí tu gasto en lenguaje natural",
+            font=('Segoe UI', 12, 'bold'),
+            bg=COLORES['background']
+        ).pack(pady=(0, 10))
+
+        tk.Label(
+            frame,
+            text='Ejemplos:\n"Gasto 2000 en supermercado"\n"Pagué 1500 de comida"\n"Almuerzo $350"\n"500 pesos en café"',
+            font=('Segoe UI', 9),
+            bg=COLORES['background'],
+            fg=COLORES['text_secondary'],
+            justify=tk.LEFT
+        ).pack(pady=(0, 15))
+
+        # Campo de texto libre
+        tk.Label(frame, text="💬 Describe tu gasto:", font=('Segoe UI', 10, 'bold'),
+                bg=COLORES['background']).pack(anchor='w', pady=3)
+
+        entry_texto = tk.Entry(frame, font=('Segoe UI', 12))
+        entry_texto.pack(fill=tk.X, pady=5, ipady=5)
+        entry_texto.focus()
+
+        # Frame de vista previa
+        frame_preview = tk.Frame(frame, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+        frame_preview.pack(fill=tk.BOTH, expand=True, pady=15)
+
+        tk.Label(
+            frame_preview,
+            text="📝 Vista Previa",
+            font=('Segoe UI', 10, 'bold'),
+            bg=COLORES['card_bg']
+        ).pack(pady=10)
+
+        lbl_monto = tk.Label(frame_preview, text="💰 Monto: -", font=('Segoe UI', 10),
+                            bg=COLORES['card_bg'], anchor='w')
+        lbl_monto.pack(fill=tk.X, padx=15, pady=3)
+
+        lbl_categoria = tk.Label(frame_preview, text="📂 Categoría: -", font=('Segoe UI', 10),
+                                bg=COLORES['card_bg'], anchor='w')
+        lbl_categoria.pack(fill=tk.X, padx=15, pady=3)
+
+        lbl_descripcion = tk.Label(frame_preview, text="📝 Descripción: -", font=('Segoe UI', 10),
+                                   bg=COLORES['card_bg'], anchor='w')
+        lbl_descripcion.pack(fill=tk.X, padx=15, pady=3)
+
+        lbl_confianza = tk.Label(frame_preview, text="", font=('Segoe UI', 9),
+                                bg=COLORES['card_bg'], fg=COLORES['text_secondary'])
+        lbl_confianza.pack(pady=5)
+
+        datos_parseados = {'monto': 0, 'categoria': None, 'descripcion': ''}
+
+        def actualizar_preview(event=None):
+            nonlocal datos_parseados
+            texto = entry_texto.get()
+
+            if texto.strip():
+                categorias = [c[1] for c in self.db.obtener_categorias()]
+                datos_parseados = parsear_gasto_texto(texto, categorias)
+
+                lbl_monto.config(text=f"💰 Monto: ${datos_parseados['monto']:,.0f}")
+                lbl_categoria.config(text=f"📂 Categoría: {datos_parseados['categoria'] or 'No detectada'}")
+                lbl_descripcion.config(text=f"📝 Descripción: {datos_parseados['descripcion']}")
+
+                if datos_parseados['confianza'] >= 0.8:
+                    lbl_confianza.config(text="✅ Alta confianza", fg=COLORES['success'])
+                elif datos_parseados['confianza'] >= 0.5:
+                    lbl_confianza.config(text="⚠️ Confianza media - Verificá los datos", fg=COLORES['warning'])
+                else:
+                    lbl_confianza.config(text="❌ Baja confianza - Revisá los datos", fg=COLORES['danger'])
+            else:
+                lbl_monto.config(text="💰 Monto: -")
+                lbl_categoria.config(text="📂 Categoría: -")
+                lbl_descripcion.config(text="📝 Descripción: -")
+                lbl_confianza.config(text="")
+
+        entry_texto.bind('<KeyRelease>', actualizar_preview)
+
+        def guardar():
+            if datos_parseados['monto'] <= 0:
+                messagebox.showwarning("Error", "No se pudo detectar un monto válido")
+                return
+
+            if not datos_parseados['categoria']:
+                messagebox.showwarning("Error", "No se pudo detectar una categoría")
+                return
+
+            try:
+                fecha = datetime.date.today().isoformat()
+                cuentas = self.db.obtener_cuentas()
+                cuenta = cuentas[0][1] if cuentas else '💵 Efectivo'
+
+                self.db.agregar_gasto(
+                    fecha,
+                    datos_parseados['categoria'],
+                    datos_parseados['monto'],
+                    'ARS',
+                    datos_parseados['descripcion'],
+                    cuenta
+                )
+
+                # Verificar logros
+                self.db.verificar_logros()
+
+                messagebox.showinfo("Éxito", "✅ Gasto registrado con éxito!")
+                v.destroy()
+
+                if self.vista_actual == 'gastos':
+                    self.cargar_gastos()
+
+            except Exception as e:
+                messagebox.showerror("Error", f"Error al guardar: {e}")
+
+        frame_btns = tk.Frame(frame, bg=COLORES['background'])
+        frame_btns.pack(pady=10)
+
+        tk.Button(frame_btns, text="💾 Guardar", command=guardar, bg=COLORES['success'],
+                 fg='white', font=('Segoe UI', 11, 'bold'), relief=tk.FLAT, cursor='hand2',
+                 padx=30, pady=10).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(frame_btns, text="❌ Cancelar", command=v.destroy, bg=COLORES['danger'],
+                 fg='white', font=('Segoe UI', 10), relief=tk.FLAT, cursor='hand2',
+                 padx=30, pady=10).pack(side=tk.LEFT, padx=5)
 
     def ventana_agregar_gasto(self):
         v = tk.Toplevel(self.root)
@@ -1779,54 +2875,87 @@ class GestorGastos:
     def ventana_nueva_categoria(self, callback=None):
         v = tk.Toplevel(self.root)
         v.title("➕ Nueva Categoría")
-        v.geometry("400x350")
+        v.geometry("650x600")
         v.configure(bg=COLORES['background'])
         v.transient(self.root)
         v.grab_set()
-        
+
         v.update_idletasks()
-        x = (v.winfo_screenwidth() // 2) - (400 // 2)
-        y = (v.winfo_screenheight() // 2) - (350 // 2)
-        v.geometry(f'400x350+{x}+{y}')
-        
+        x = (v.winfo_screenwidth() // 2) - (650 // 2)
+        y = (v.winfo_screenheight() // 2) - (600 // 2)
+        v.geometry(f'650x600+{x}+{y}')
+
         frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
         frame.pack(fill=tk.BOTH, expand=True)
-        
+
         tk.Label(frame, text="📝 Nombre:", bg=COLORES['background']).pack(anchor='w', pady=3)
         entry_nombre = tk.Entry(frame, font=('Segoe UI', 11))
         entry_nombre.pack(fill=tk.X, pady=3)
-        
+
         tk.Label(frame, text="🎨 Color (hex):", bg=COLORES['background']).pack(anchor='w', pady=3)
         entry_color = tk.Entry(frame, font=('Segoe UI', 11))
         entry_color.insert(0, '#4a90e2')
         entry_color.pack(fill=tk.X, pady=3)
-        
-        tk.Label(frame, text="📌 Selecciona un icono (100 disponibles):", 
+
+        tk.Label(frame, text=f"📌 Selecciona un icono ({len(ICONOS_CATEGORIAS)} disponibles):",
                 font=('Segoe UI', 10, 'bold'), bg=COLORES['background']).pack(anchor='w', pady=(10, 3))
-        iconos = ['🍕', '🚗', '🏠', '🛒', '💊', '🎮', '👕', '📱', '💇', '🎓', '❓']
-        
-        frame_iconos = tk.Frame(frame, bg=COLORES['card_bg'], relief=tk.RAISED, bd=1)
-        frame_iconos.pack(fill=tk.X, pady=10)
-        
+
+        # Canvas con scroll para los iconos
+        canvas_iconos = tk.Canvas(frame, height=300, bg=COLORES['card_bg'], highlightthickness=1,
+                                 highlightbackground=COLORES['border'])
+        scrollbar_iconos = tk.Scrollbar(frame, orient="vertical", command=canvas_iconos.yview)
+
+        frame_iconos = tk.Frame(canvas_iconos, bg=COLORES['card_bg'])
+        frame_iconos.bind("<Configure>", lambda e: canvas_iconos.configure(scrollregion=canvas_iconos.bbox("all")))
+
+        canvas_iconos.create_window((0, 0), window=frame_iconos, anchor="nw", width=580)
+        canvas_iconos.configure(yscrollcommand=scrollbar_iconos.set)
+
+        canvas_iconos.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, pady=5)
+        scrollbar_iconos.pack(side=tk.RIGHT, fill=tk.Y)
+
         icono_sel = tk.StringVar(value='📂')
-        
-        for i, ico in enumerate(iconos):
-            tk.Button(frame_iconos, text=ico, font=('Segoe UI', 14), bg=COLORES['card_bg'],
-                     relief=tk.FLAT, cursor='hand2', command=lambda ic=ico: icono_sel.set(ic)
-                     ).grid(row=i//6, column=i%6, padx=2, pady=2)
-        
-        tk.Label(frame, textvariable=icono_sel, font=('Segoe UI', 28), bg=COLORES['background']).pack(pady=10)
-        
+        botones_iconos = []
+
+        # Crear grid de iconos
+        for i, ico in enumerate(ICONOS_CATEGORIAS):
+            btn = tk.Button(frame_iconos, text=ico, font=('Segoe UI', 16), bg=COLORES['card_bg'],
+                           relief=tk.FLAT, cursor='hand2', width=2, height=1,
+                           command=lambda ic=ico: seleccionar_icono(ic))
+            btn.grid(row=i//15, column=i%15, padx=2, pady=2)
+            botones_iconos.append(btn)
+
+        # Icono seleccionado (más grande)
+        frame_sel = tk.Frame(frame, bg=COLORES['light'], relief=tk.RAISED, bd=2)
+        frame_sel.pack(fill=tk.X, pady=10)
+
+        tk.Label(frame_sel, text="Icono seleccionado:", font=('Segoe UI', 9),
+                bg=COLORES['light']).pack(pady=(10, 5))
+        lbl_icono = tk.Label(frame_sel, textvariable=icono_sel, font=('Segoe UI', 40),
+                            bg=COLORES['light'])
+        lbl_icono.pack(pady=(0, 10))
+
+        def seleccionar_icono(icono):
+            icono_sel.set(icono)
+            # Resaltar botón seleccionado
+            for btn in botones_iconos:
+                btn.config(bg=COLORES['card_bg'])
+            # Encontrar y resaltar el botón clickeado
+            for btn in botones_iconos:
+                if btn.cget('text') == icono:
+                    btn.config(bg=COLORES['primary'])
+                    break
+
         def guardar():
             try:
                 nombre = entry_nombre.get().strip()
                 color = entry_color.get().strip()
                 icono = icono_sel.get()
-                
+
                 if not nombre:
-                    messagebox.showwarning("Error", "Ingresa un nombre")
+                    messagebox.showwarning("Error", "Ingresá un nombre")
                     return
-                
+
                 self.db.agregar_categoria(nombre, color, icono)
                 messagebox.showinfo("Éxito", "✅ Categoría agregada")
                 v.destroy()
@@ -1834,14 +2963,14 @@ class GestorGastos:
                     callback()
             except Exception as e:
                 messagebox.showerror("Error", f"Error: {e}")
-        
+
         frame_btns = tk.Frame(frame, bg=COLORES['background'])
-        frame_btns.pack(pady=15)
-        
+        frame_btns.pack(pady=10)
+
         tk.Button(frame_btns, text="💾 Guardar", command=guardar, bg=COLORES['success'],
                  fg='white', font=('Segoe UI', 10, 'bold'), relief=tk.FLAT, cursor='hand2',
                  padx=25, pady=8).pack(side=tk.LEFT, padx=5)
-        
+
         tk.Button(frame_btns, text="❌ Cancelar", command=v.destroy, bg=COLORES['danger'],
                  fg='white', font=('Segoe UI', 10), relief=tk.FLAT, cursor='hand2',
                  padx=25, pady=8).pack(side=tk.LEFT, padx=5)
