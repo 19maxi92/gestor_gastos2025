@@ -1,6 +1,7 @@
 """
-💰 GESTOR DE GASTOS PERSONAL v3.1 - VERSIÓN COMPLETA Y FUNCIONAL
+💰 GESTOR DE GASTOS PERSONAL v6.0 - VERSIÓN CON CONTEXTO E IA
 Aplicación completa para gestión de finanzas personales
+Con reglas de contexto (clima, hora, ubicación) y geofencing
 Autor: Maximiliano Burgos
 Año: 2025
 
@@ -313,6 +314,45 @@ class Database:
             )
         ''')
 
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS reglas_contexto (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                tipo_trigger TEXT NOT NULL,
+                condicion TEXT NOT NULL,
+                accion TEXT NOT NULL,
+                parametros TEXT,
+                activa INTEGER DEFAULT 1,
+                ultima_ejecucion TEXT
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ubicaciones_gastos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                gasto_id INTEGER NOT NULL,
+                latitud REAL,
+                longitud REAL,
+                geohash TEXT,
+                lugar_nombre TEXT,
+                comercio TEXT,
+                FOREIGN KEY (gasto_id) REFERENCES gastos(id)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS reglas_geofence (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                latitud REAL NOT NULL,
+                longitud REAL NOT NULL,
+                radio_metros INTEGER NOT NULL,
+                categoria_sugerida TEXT,
+                cuenta_sugerida TEXT,
+                activa INTEGER DEFAULT 1
+            )
+        ''')
+
         self.conn.commit()
 
     def inicializar_datos(self):
@@ -328,6 +368,9 @@ class Database:
         # Configuración por defecto
         cursor.execute('INSERT OR IGNORE INTO configuracion (clave, valor) VALUES (?, ?)', ('gamificacion_activa', 'true'))
         cursor.execute('INSERT OR IGNORE INTO configuracion (clave, valor) VALUES (?, ?)', ('alertas_activas', 'true'))
+        cursor.execute('INSERT OR IGNORE INTO configuracion (clave, valor) VALUES (?, ?)', ('geolocation_activa', 'false'))
+        cursor.execute('INSERT OR IGNORE INTO configuracion (clave, valor) VALUES (?, ?)', ('reglas_contexto_activas', 'true'))
+        cursor.execute('INSERT OR IGNORE INTO configuracion (clave, valor) VALUES (?, ?)', ('ubicacion_actual', ''))
 
         # Logros iniciales
         logros_default = [
@@ -706,6 +749,153 @@ class Database:
                 cursor.execute('UPDATE logros SET progreso_actual=? WHERE id=?', (progreso, id_logro))
                 self.conn.commit()
 
+    # === REGLAS DE CONTEXTO ===
+    def agregar_regla_contexto(self, nombre, tipo_trigger, condicion, accion, parametros=''):
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT INTO reglas_contexto (nombre, tipo_trigger, condicion, accion, parametros)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (nombre, tipo_trigger, condicion, accion, parametros))
+        self.conn.commit()
+
+    def obtener_reglas_contexto(self, solo_activas=False):
+        cursor = self.conn.cursor()
+        if solo_activas:
+            cursor.execute('SELECT * FROM reglas_contexto WHERE activa=1 ORDER BY nombre')
+        else:
+            cursor.execute('SELECT * FROM reglas_contexto ORDER BY nombre')
+        return cursor.fetchall()
+
+    def ejecutar_reglas_contexto(self, contexto):
+        """Evalúa y ejecuta reglas basadas en contexto actual"""
+        if self.obtener_config('reglas_contexto_activas') != 'true':
+            return
+
+        reglas = self.obtener_reglas_contexto(solo_activas=True)
+        cursor = self.conn.cursor()
+
+        for regla in reglas:
+            id_regla, nombre, tipo_trigger, condicion, accion, params, activa, ultima_ej = regla
+
+            # Evaluar condición
+            cumple = False
+
+            if tipo_trigger == 'hora':
+                hora_actual = datetime.datetime.now().hour
+                if 'mañana' in condicion and 6 <= hora_actual < 12:
+                    cumple = True
+                elif 'tarde' in condicion and 12 <= hora_actual < 20:
+                    cumple = True
+                elif 'noche' in condicion and (hora_actual >= 20 or hora_actual < 6):
+                    cumple = True
+
+            elif tipo_trigger == 'dia_semana':
+                dia = datetime.datetime.now().weekday()
+                if 'fin_de_semana' in condicion and dia >= 5:
+                    cumple = True
+                elif 'semana' in condicion and dia < 5:
+                    cumple = True
+
+            elif tipo_trigger == 'clima':
+                if contexto.get('temperatura'):
+                    temp = contexto['temperatura']
+                    if 'calor' in condicion and temp > 28:
+                        cumple = True
+                    elif 'frio' in condicion and temp < 15:
+                        cumple = True
+
+            elif tipo_trigger == 'mes':
+                mes = datetime.datetime.now().month
+                if 'vacaciones' in condicion and mes in [1, 2, 7, 12]:
+                    cumple = True
+
+            # Ejecutar acción si cumple
+            if cumple:
+                hoy = datetime.date.today().isoformat()
+                if ultima_ej != hoy:  # Solo una vez por día
+                    self.ejecutar_accion_regla(accion, params)
+                    cursor.execute('UPDATE reglas_contexto SET ultima_ejecucion=? WHERE id=?',
+                                 (hoy, id_regla))
+                    self.conn.commit()
+
+    def ejecutar_accion_regla(self, accion, parametros):
+        """Ejecuta la acción de una regla"""
+        if accion == 'alerta':
+            self.crear_alerta('regla_contexto', parametros, 'info')
+        elif accion == 'cambiar_presupuesto':
+            # Parsear parámetros: "categoria:Comida,factor:0.8"
+            pass
+
+    # === GEOLOCALIZACIÓN ===
+    def agregar_ubicacion_gasto(self, gasto_id, lat, lon, lugar='', comercio=''):
+        cursor = self.conn.cursor()
+        geohash = self.calcular_geohash(lat, lon, precision=7)
+        cursor.execute('''
+            INSERT INTO ubicaciones_gastos (gasto_id, latitud, longitud, geohash, lugar_nombre, comercio)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (gasto_id, lat, lon, geohash, lugar, comercio))
+        self.conn.commit()
+
+    def calcular_geohash(self, lat, lon, precision=7):
+        """Calcula geohash simplificado"""
+        # Implementación básica de geohash
+        lat_code = int((lat + 90) * 10000)
+        lon_code = int((lon + 180) * 10000)
+        return f"{lat_code:07d}{lon_code:08d}"[:precision]
+
+    def obtener_gastos_por_ubicacion(self, lat, lon, radio_metros=500):
+        """Obtiene gastos cerca de una ubicación"""
+        cursor = self.conn.cursor()
+        geohash_centro = self.calcular_geohash(lat, lon, precision=5)
+
+        cursor.execute('''
+            SELECT g.*, u.lugar_nombre, u.comercio
+            FROM gastos g
+            JOIN ubicaciones_gastos u ON g.id = u.gasto_id
+            WHERE u.geohash LIKE ?
+            ORDER BY g.fecha DESC
+        ''', (geohash_centro + '%',))
+        return cursor.fetchall()
+
+    def agregar_regla_geofence(self, nombre, lat, lon, radio, categoria='', cuenta=''):
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT INTO reglas_geofence (nombre, latitud, longitud, radio_metros, categoria_sugerida, cuenta_sugerida)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (nombre, lat, lon, radio, categoria, cuenta))
+        self.conn.commit()
+
+    def obtener_reglas_geofence(self):
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT * FROM reglas_geofence WHERE activa=1')
+        return cursor.fetchall()
+
+    def sugerir_categoria_por_ubicacion(self, lat, lon):
+        """Sugiere categoría basada en reglas de geofence"""
+        reglas = self.obtener_reglas_geofence()
+
+        for regla in reglas:
+            id_r, nombre, lat_r, lon_r, radio, cat_sug, cuenta_sug, activa = regla
+
+            # Calcular distancia (fórmula Haversine simplificada)
+            import math
+            R = 6371000  # Radio de la Tierra en metros
+
+            lat1, lon1 = math.radians(lat), math.radians(lon)
+            lat2, lon2 = math.radians(lat_r), math.radians(lon_r)
+
+            dlat = lat2 - lat1
+            dlon = lon2 - lon1
+
+            a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+            c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+            distancia = R * c
+
+            if distancia <= radio:
+                return {'categoria': cat_sug, 'cuenta': cuenta_sug, 'lugar': nombre}
+
+        return None
+
     def cerrar(self):
         self.conn.close()
 
@@ -806,6 +996,88 @@ def parsear_gasto_texto(texto, categorias_disponibles):
     }
 
 
+# === APIs DE CONTEXTO ===
+def obtener_clima(ciudad='Buenos Aires'):
+    """Obtiene información del clima usando API pública"""
+    try:
+        # Usar Open-Meteo (API gratuita sin key)
+        # Para Buenos Aires: lat=-34.6037, lon=-58.3816
+        coords = {
+            'Buenos Aires': (-34.6037, -58.3816),
+            'Córdoba': (-31.4201, -64.1888),
+            'Rosario': (-32.9468, -60.6393),
+            'Mendoza': (-32.8895, -68.8458)
+        }
+
+        lat, lon = coords.get(ciudad, coords['Buenos Aires'])
+
+        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
+        req = urllib.request.Request(url)
+        req.add_header('User-Agent', 'Mozilla/5.0')
+
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json.loads(response.read().decode())
+
+        if 'current_weather' in data:
+            temp = data['current_weather']['temperature']
+            windspeed = data['current_weather']['windspeed']
+            weathercode = data['current_weather']['weathercode']
+
+            # Códigos de clima según WMO
+            condiciones = {
+                0: 'Despejado',
+                1: 'Mayormente despejado',
+                2: 'Parcialmente nublado',
+                3: 'Nublado',
+                45: 'Niebla',
+                48: 'Niebla con escarcha',
+                51: 'Llovizna ligera',
+                61: 'Lluvia ligera',
+                80: 'Lluvia',
+                95: 'Tormenta'
+            }
+
+            condicion = condiciones.get(weathercode, 'Desconocido')
+
+            return {
+                'temperatura': temp,
+                'viento': windspeed,
+                'condicion': condicion,
+                'ciudad': ciudad
+            }
+    except:
+        return None
+
+def obtener_contexto_actual():
+    """Obtiene contexto completo actual"""
+    contexto = {}
+
+    # Clima
+    clima = obtener_clima()
+    if clima:
+        contexto['temperatura'] = clima['temperatura']
+        contexto['clima'] = clima['condicion']
+
+    # Hora del día
+    hora = datetime.datetime.now().hour
+    if 6 <= hora < 12:
+        contexto['momento'] = 'mañana'
+    elif 12 <= hora < 20:
+        contexto['momento'] = 'tarde'
+    else:
+        contexto['momento'] = 'noche'
+
+    # Día de la semana
+    dia = datetime.datetime.now().weekday()
+    contexto['es_fin_de_semana'] = dia >= 5
+
+    # Mes (vacaciones)
+    mes = datetime.datetime.now().month
+    contexto['es_vacaciones'] = mes in [1, 2, 7, 12]
+
+    return contexto
+
+
 # === COTIZACIONES ===
 def obtener_cotizacion_dolar():
     try:
@@ -886,8 +1158,14 @@ class GestorGastos:
         self.db.verificar_presupuestos(self.mes_actual)  # Verificar presupuestos
         self.db.verificar_gastos_inusuales(self.mes_actual)  # Detectar gastos inusuales
         self.db.verificar_logros()  # Verificar logros
+
+        # Contexto y reglas
+        self.contexto_actual = obtener_contexto_actual()
+        self.db.ejecutar_reglas_contexto(self.contexto_actual)
+
         self.crear_interfaz()
         self.actualizar_cotizaciones()
+        self.actualizar_clima()
         self.root.protocol("WM_DELETE_WINDOW", self.al_cerrar)
 
     def centrar_ventana(self):
@@ -924,21 +1202,49 @@ class GestorGastos:
 
         tk.Label(
             frame_header,
-            text="💰 Gestor de Gastos v4.0",
+            text="💰 Gestor de Gastos v6.0",
             font=('Segoe UI', 20, 'bold'),
             bg=COLORES['primary'],
             fg='white'
         ).pack(side=tk.LEFT, padx=25)
 
+        # Frame para cotización y botón
+        frame_cotizacion = tk.Frame(frame_header, bg=COLORES['primary'])
+        frame_cotizacion.pack(side=tk.RIGHT, padx=15)
+
+        # Botón de conversión rápida
+        tk.Button(
+            frame_cotizacion,
+            text="💱",
+            font=('Segoe UI', 12, 'bold'),
+            bg=COLORES['primary_dark'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=self.ventana_conversion_rapida,
+            padx=8,
+            pady=2
+        ).pack(side=tk.RIGHT, padx=(5, 0))
+
         # Cotización en header
         self.label_dolar = tk.Label(
-            frame_header,
-            text="💱 Cargando...",
+            frame_cotizacion,
+            text="💵 Cargando...",
             font=('Segoe UI', 10),
             bg=COLORES['primary'],
             fg='white'
         )
-        self.label_dolar.pack(side=tk.RIGHT, padx=25)
+        self.label_dolar.pack(side=tk.RIGHT)
+
+        # Info de clima
+        self.label_clima = tk.Label(
+            frame_header,
+            text="",
+            font=('Segoe UI', 9),
+            bg=COLORES['primary'],
+            fg='white'
+        )
+        self.label_clima.pack(side=tk.RIGHT, padx=15)
 
         tk.Label(
             frame_header,
@@ -982,6 +1288,8 @@ class GestorGastos:
             ("💳 Tarjetas", 'tarjetas', self.mostrar_tarjetas),
             ("🔄 Recurrentes", 'recurrentes', self.mostrar_recurrentes),
             ("📊 Presupuestos", 'presupuestos', self.mostrar_presupuestos),
+            ("⚙️ Reglas de Contexto", 'reglas_contexto', self.mostrar_reglas_contexto),
+            ("📍 Geofence", 'geofence', self.mostrar_geofence),
             ("🎮 Logros", 'logros', self.mostrar_logros),
             ("💱 Conversor", 'conversor', self.ventana_conversor),
         ]
@@ -1059,6 +1367,134 @@ class GestorGastos:
 
         thread = threading.Thread(target=actualizar, daemon=True)
         thread.start()
+
+    def actualizar_clima(self):
+        """Actualiza la información del clima en el header"""
+        def actualizar():
+            clima = obtener_clima()
+            if clima:
+                icono_clima = {
+                    'Despejado': '☀️',
+                    'Mayormente despejado': '🌤️',
+                    'Parcialmente nublado': '⛅',
+                    'Nublado': '☁️',
+                    'Lluvia': '🌧️',
+                    'Tormenta': '⛈️'
+                }.get(clima['condicion'], '🌡️')
+
+                texto = f"{icono_clima} {clima['temperatura']:.0f}°C - {clima['condicion']}"
+                self.label_clima.config(text=texto)
+
+        thread = threading.Thread(target=actualizar, daemon=True)
+        thread.start()
+
+    def ventana_conversion_rapida(self):
+        """Ventana emergente para conversión rápida de monedas"""
+        v = tk.Toplevel(self.root)
+        v.title("💱 Conversión Rápida")
+        v.geometry("380x480")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (380 // 2)
+        y = (v.winfo_screenheight() // 2) - (480 // 2)
+        v.geometry(f'380x480+{x}+{y}')
+
+        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(
+            frame,
+            text="💱 Conversor de Viajes",
+            font=('Segoe UI', 14, 'bold'),
+            bg=COLORES['background']
+        ).pack(pady=(0, 15))
+
+        # Monto a convertir
+        tk.Label(frame, text="💰 Monto:", bg=COLORES['background']).pack(anchor='w', pady=3)
+        entry_monto = tk.Entry(frame, font=('Segoe UI', 14), justify='center')
+        entry_monto.insert(0, "1000")
+        entry_monto.pack(fill=tk.X, pady=5, ipady=5)
+
+        # Frame de resultados
+        frame_resultados = tk.Frame(frame, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+        frame_resultados.pack(fill=tk.BOTH, expand=True, pady=15)
+
+        tk.Label(
+            frame_resultados,
+            text="Conversiones desde ARS:",
+            font=('Segoe UI', 10, 'bold'),
+            bg=COLORES['card_bg']
+        ).pack(pady=10)
+
+        # Labels de resultados
+        conversiones = [
+            ('🇺🇸 USD (Dólar)', 'usd'),
+            ('🇪🇺 EUR (Euro)', 'eur'),
+            ('🇧🇷 BRL (Real)', 'brl'),
+            ('🇨🇱 CLP (Peso chileno)', 'clp'),
+            ('🇲🇽 MXN (Peso mexicano)', 'mxn'),
+            ('🇺🇾 UYU (Peso uruguayo)', 'uyu')
+        ]
+
+        labels_resultados = {}
+        for texto, codigo in conversiones:
+            lbl = tk.Label(
+                frame_resultados,
+                text=f"{texto}: ...",
+                font=('Segoe UI', 10),
+                bg=COLORES['card_bg'],
+                anchor='w'
+            )
+            lbl.pack(fill=tk.X, padx=15, pady=3)
+            labels_resultados[codigo] = lbl
+
+        def convertir(event=None):
+            try:
+                monto = float(entry_monto.get().replace(',', '.'))
+                tasas = obtener_tasas_conversion()
+
+                if tasas and 'ARS' in tasas:
+                    # Convertir desde ARS a otras monedas
+                    monto_usd = monto / tasas['ARS']
+
+                    conversiones_vals = {
+                        'usd': monto_usd,
+                        'eur': monto_usd * tasas.get('EUR', 0.92),
+                        'brl': monto_usd * tasas.get('BRL', 5.0),
+                        'clp': monto_usd * tasas.get('CLP', 900),
+                        'mxn': monto_usd * tasas.get('MXN', 17),
+                        'uyu': monto_usd * tasas.get('UYU', 39)
+                    }
+
+                    labels_resultados['usd'].config(text=f"🇺🇸 USD (Dólar): ${conversiones_vals['usd']:,.2f}")
+                    labels_resultados['eur'].config(text=f"🇪🇺 EUR (Euro): €{conversiones_vals['eur']:,.2f}")
+                    labels_resultados['brl'].config(text=f"🇧🇷 BRL (Real): R${conversiones_vals['brl']:,.2f}")
+                    labels_resultados['clp'].config(text=f"🇨🇱 CLP (Peso chileno): ${conversiones_vals['clp']:,.0f}")
+                    labels_resultados['mxn'].config(text=f"🇲🇽 MXN (Peso mexicano): ${conversiones_vals['mxn']:,.2f}")
+                    labels_resultados['uyu'].config(text=f"🇺🇾 UYU (Peso uruguayo): ${conversiones_vals['uyu']:,.2f}")
+
+            except Exception as e:
+                messagebox.showerror("Error", f"Error en conversión: {e}")
+
+        entry_monto.bind('<KeyRelease>', convertir)
+
+        tk.Button(
+            frame,
+            text="🔄 Actualizar",
+            command=convertir,
+            bg=COLORES['info'],
+            fg='white',
+            font=('Segoe UI', 10, 'bold'),
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=30,
+            pady=8
+        ).pack(pady=10)
+
+        # Convertir al abrir
+        v.after(100, convertir)
 
     def mostrar_dashboard(self):
         """Vista principal del dashboard"""
@@ -2334,6 +2770,542 @@ class GestorGastos:
                 if pct > 0:
                     ancho_prog = int(ancho * (pct / 100))
                     canvas_barra.create_rectangle(0, 0, ancho_prog, 15, fill=COLORES['info'], outline='')
+
+    def mostrar_reglas_contexto(self):
+        """Vista de reglas basadas en contexto (hora, clima, calendario)"""
+        frame_btn = tk.Frame(self.frame_contenido, bg=COLORES['background'])
+        frame_btn.pack(fill=tk.X, padx=15, pady=10)
+
+        tk.Button(
+            frame_btn,
+            text="➕ Nueva Regla de Contexto",
+            font=('Segoe UI', 10, 'bold'),
+            bg=COLORES['success'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=self.ventana_nueva_regla_contexto,
+            padx=15,
+            pady=8
+        ).pack(side=tk.LEFT)
+
+        # Toggle para activar/desactivar todas las reglas
+        estado_actual = self.db.obtener_config('reglas_contexto_activas') == 'true'
+        estado_text = "🟢 Activas" if estado_actual else "🔴 Desactivadas"
+
+        def toggle_reglas():
+            nuevo_estado = 'false' if estado_actual else 'true'
+            self.db.actualizar_config('reglas_contexto_activas', nuevo_estado)
+            self.mostrar_reglas_contexto()  # Recargar vista
+
+        tk.Button(
+            frame_btn,
+            text=f"⚙️ {estado_text}",
+            font=('Segoe UI', 10, 'bold'),
+            bg=COLORES['success'] if estado_actual else COLORES['danger'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=toggle_reglas,
+            padx=15,
+            pady=8
+        ).pack(side=tk.LEFT, padx=10)
+
+        canvas = tk.Canvas(self.frame_contenido, bg=COLORES['background'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(self.frame_contenido, orient="vertical", command=canvas.yview)
+
+        frame_lista = tk.Frame(canvas, bg=COLORES['background'])
+        frame_lista.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+        canvas.create_window((0, 0), window=frame_lista, anchor="nw", width=1100)
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True, padx=15)
+        scrollbar.pack(side="right", fill="y")
+
+        reglas = self.db.obtener_reglas_contexto()
+
+        if not reglas:
+            tk.Label(
+                frame_lista,
+                text="⚙️ No hay reglas de contexto configuradas\n\nCreá reglas automáticas basadas en hora, clima, día de la semana o mes",
+                font=('Segoe UI', 11),
+                bg=COLORES['background'],
+                fg=COLORES['text_secondary'],
+                justify=tk.CENTER
+            ).pack(pady=60)
+            return
+
+        for regla in reglas:
+            id_r, nombre, tipo_trigger, condicion, accion, parametros, activa, ultima_ejecucion = regla
+
+            frame = tk.Frame(frame_lista, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+            frame.pack(fill=tk.X, pady=5, padx=5)
+
+            # Color según estado
+            color = COLORES['success'] if activa else COLORES['text_secondary']
+            estado = "✅ Activa" if activa else "⏸️ Pausada"
+
+            frame_header = tk.Frame(frame, bg=color, height=35)
+            frame_header.pack(fill=tk.X)
+            frame_header.pack_propagate(False)
+
+            tk.Label(
+                frame_header,
+                text=f"⚙️ {nombre}",
+                font=('Segoe UI', 11, 'bold'),
+                bg=color,
+                fg='white'
+            ).pack(side=tk.LEFT, padx=15, pady=7)
+
+            tk.Label(
+                frame_header,
+                text=estado,
+                font=('Segoe UI', 9),
+                bg=color,
+                fg='white'
+            ).pack(side=tk.RIGHT, padx=15)
+
+            frame_contenido = tk.Frame(frame, bg=COLORES['card_bg'])
+            frame_contenido.pack(fill=tk.X, padx=15, pady=10)
+
+            # Mostrar detalles
+            tipo_icons = {
+                'hora': '🕐',
+                'dia_semana': '📅',
+                'clima': '🌤️',
+                'mes': '📆',
+                'temperatura': '🌡️'
+            }
+            icon = tipo_icons.get(tipo_trigger, '⚙️')
+
+            info = f"{icon} Trigger: {tipo_trigger} | Condición: {condicion} | Acción: {accion}"
+            if ultima_ejecucion:
+                info += f"\n🕒 Última ejecución: {ultima_ejecucion}"
+
+            tk.Label(
+                frame_contenido,
+                text=info,
+                font=('Segoe UI', 10),
+                bg=COLORES['card_bg'],
+                justify=tk.LEFT
+            ).pack(anchor='w', pady=3)
+
+            # Botones de acción
+            frame_botones = tk.Frame(frame_contenido, bg=COLORES['card_bg'])
+            frame_botones.pack(anchor='w', pady=5)
+
+            def toggle_regla(regla_id=id_r, actual=activa):
+                cursor = self.db.conn.cursor()
+                cursor.execute('UPDATE reglas_contexto SET activa=? WHERE id=?',
+                             (0 if actual else 1, regla_id))
+                self.db.conn.commit()
+                self.mostrar_reglas_contexto()
+
+            tk.Button(
+                frame_botones,
+                text="⏸️ Pausar" if activa else "▶️ Activar",
+                font=('Segoe UI', 9),
+                bg=COLORES['warning'] if activa else COLORES['success'],
+                fg='white',
+                relief=tk.FLAT,
+                cursor='hand2',
+                command=toggle_regla,
+                padx=10,
+                pady=4
+            ).pack(side=tk.LEFT, padx=3)
+
+            def eliminar_regla(regla_id=id_r):
+                if messagebox.askyesno("Confirmar", "¿Eliminar esta regla de contexto?"):
+                    cursor = self.db.conn.cursor()
+                    cursor.execute('DELETE FROM reglas_contexto WHERE id=?', (regla_id,))
+                    self.db.conn.commit()
+                    self.mostrar_reglas_contexto()
+
+            tk.Button(
+                frame_botones,
+                text="🗑️ Eliminar",
+                font=('Segoe UI', 9),
+                bg=COLORES['danger'],
+                fg='white',
+                relief=tk.FLAT,
+                cursor='hand2',
+                command=eliminar_regla,
+                padx=10,
+                pady=4
+            ).pack(side=tk.LEFT, padx=3)
+
+    def ventana_nueva_regla_contexto(self):
+        """Ventana para crear nueva regla de contexto"""
+        v = tk.Toplevel(self.root)
+        v.title("⚙️ Nueva Regla de Contexto")
+        v.geometry("550x600")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+        v.grab_set()
+
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (550 // 2)
+        y = (v.winfo_screenheight() // 2) - (600 // 2)
+        v.geometry(f'550x600+{x}+{y}')
+
+        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(
+            frame,
+            text="⚙️ Crear Regla Automática",
+            font=('Segoe UI', 16, 'bold'),
+            bg=COLORES['background']
+        ).pack(pady=10)
+
+        tk.Label(frame, text="📝 Nombre de la regla:", bg=COLORES['background']).pack(anchor='w', pady=3)
+        entry_nombre = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_nombre.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="🎯 Tipo de Trigger:", bg=COLORES['background']).pack(anchor='w', pady=3)
+        combo_trigger = ttk.Combobox(frame, values=['hora', 'dia_semana', 'clima', 'mes', 'temperatura'],
+                                      state='readonly', font=('Segoe UI', 11))
+        combo_trigger.set('hora')
+        combo_trigger.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="⚡ Condición:", bg=COLORES['background']).pack(anchor='w', pady=3)
+
+        # Frame dinámico para condición
+        frame_condicion = tk.Frame(frame, bg=COLORES['background'])
+        frame_condicion.pack(fill=tk.X, pady=3)
+
+        entry_condicion = tk.Entry(frame_condicion, font=('Segoe UI', 11))
+        entry_condicion.pack(fill=tk.X)
+
+        # Texto de ayuda dinámico
+        label_ayuda = tk.Label(
+            frame,
+            text="Ej: 'mañana', 'tarde', 'noche'",
+            font=('Segoe UI', 9),
+            bg=COLORES['background'],
+            fg=COLORES['text_secondary']
+        )
+        label_ayuda.pack(anchor='w')
+
+        def actualizar_ayuda(event=None):
+            trigger = combo_trigger.get()
+            ayudas = {
+                'hora': "Ej: 'mañana' (6-12), 'tarde' (12-18), 'noche' (18-24), 'madrugada' (0-6)",
+                'dia_semana': "Ej: 'lunes', 'martes', 'fin_de_semana', 'dia_laborable'",
+                'clima': "Ej: 'lluvia', 'soleado', 'nublado'",
+                'mes': "Ej: 'vacaciones' (enero, julio), 'navidad' (diciembre)",
+                'temperatura': "Ej: 'calor' (>25°C), 'frio' (<15°C)"
+            }
+            label_ayuda.config(text=ayudas.get(trigger, ""))
+
+        combo_trigger.bind('<<ComboboxSelected>>', actualizar_ayuda)
+
+        tk.Label(frame, text="🎬 Acción:", bg=COLORES['background']).pack(anchor='w', pady=3)
+        combo_accion = ttk.Combobox(frame, values=['crear_alerta', 'sugerir_ahorro', 'recordatorio'],
+                                     state='readonly', font=('Segoe UI', 11))
+        combo_accion.set('crear_alerta')
+        combo_accion.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="📋 Mensaje/Parámetros:", bg=COLORES['background']).pack(anchor='w', pady=3)
+        text_params = tk.Text(frame, height=4, font=('Segoe UI', 10))
+        text_params.pack(fill=tk.X, pady=3)
+        text_params.insert('1.0', 'Mensaje o parámetros de la acción')
+
+        def guardar_regla():
+            nombre = entry_nombre.get().strip()
+            if not nombre:
+                messagebox.showwarning("Datos incompletos", "Ingresá un nombre para la regla")
+                return
+
+            cursor = self.db.conn.cursor()
+            cursor.execute('''
+                INSERT INTO reglas_contexto (nombre, tipo_trigger, condicion, accion, parametros, activa)
+                VALUES (?, ?, ?, ?, ?, 1)
+            ''', (
+                nombre,
+                combo_trigger.get(),
+                entry_condicion.get().strip(),
+                combo_accion.get(),
+                text_params.get('1.0', 'end-1c').strip()
+            ))
+            self.db.conn.commit()
+
+            messagebox.showinfo("Éxito", "Regla de contexto creada correctamente")
+            v.destroy()
+            self.mostrar_reglas_contexto()
+
+        tk.Button(
+            frame,
+            text="💾 Guardar Regla",
+            font=('Segoe UI', 12, 'bold'),
+            bg=COLORES['success'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=guardar_regla,
+            pady=10
+        ).pack(pady=15, fill=tk.X)
+
+    def mostrar_geofence(self):
+        """Vista de reglas de geofence (ubicación)"""
+        frame_btn = tk.Frame(self.frame_contenido, bg=COLORES['background'])
+        frame_btn.pack(fill=tk.X, padx=15, pady=10)
+
+        tk.Button(
+            frame_btn,
+            text="➕ Nueva Zona (Geofence)",
+            font=('Segoe UI', 10, 'bold'),
+            bg=COLORES['success'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=self.ventana_nueva_geofence,
+            padx=15,
+            pady=8
+        ).pack(side=tk.LEFT)
+
+        # Toggle para activar/desactivar geolocalización
+        estado_actual = self.db.obtener_config('geofence_activo') == 'true'
+        estado_text = "🟢 Activo" if estado_actual else "🔴 Desactivado"
+
+        def toggle_geofence():
+            nuevo_estado = 'false' if estado_actual else 'true'
+            self.db.actualizar_config('geofence_activo', nuevo_estado)
+            self.mostrar_geofence()
+
+        tk.Button(
+            frame_btn,
+            text=f"📍 {estado_text}",
+            font=('Segoe UI', 10, 'bold'),
+            bg=COLORES['success'] if estado_actual else COLORES['danger'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=toggle_geofence,
+            padx=15,
+            pady=8
+        ).pack(side=tk.LEFT, padx=10)
+
+        canvas = tk.Canvas(self.frame_contenido, bg=COLORES['background'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(self.frame_contenido, orient="vertical", command=canvas.yview)
+
+        frame_lista = tk.Frame(canvas, bg=COLORES['background'])
+        frame_lista.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+        canvas.create_window((0, 0), window=frame_lista, anchor="nw", width=1100)
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True, padx=15)
+        scrollbar.pack(side="right", fill="y")
+
+        cursor = self.db.conn.cursor()
+        cursor.execute('SELECT * FROM reglas_geofence ORDER BY nombre')
+        zonas = cursor.fetchall()
+
+        if not zonas:
+            tk.Label(
+                frame_lista,
+                text="📍 No hay zonas de geofence configuradas\n\nDefine lugares para auto-categorizar gastos según ubicación",
+                font=('Segoe UI', 11),
+                bg=COLORES['background'],
+                fg=COLORES['text_secondary'],
+                justify=tk.CENTER
+            ).pack(pady=60)
+            return
+
+        for zona in zonas:
+            id_z, nombre, lat, lon, radio, cat_sugerida, cuenta_sugerida, activa = zona
+
+            frame = tk.Frame(frame_lista, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+            frame.pack(fill=tk.X, pady=5, padx=5)
+
+            color = COLORES['info'] if activa else COLORES['text_secondary']
+            estado = "✅ Activa" if activa else "⏸️ Pausada"
+
+            frame_header = tk.Frame(frame, bg=color, height=35)
+            frame_header.pack(fill=tk.X)
+            frame_header.pack_propagate(False)
+
+            tk.Label(
+                frame_header,
+                text=f"📍 {nombre}",
+                font=('Segoe UI', 11, 'bold'),
+                bg=color,
+                fg='white'
+            ).pack(side=tk.LEFT, padx=15, pady=7)
+
+            tk.Label(
+                frame_header,
+                text=estado,
+                font=('Segoe UI', 9),
+                bg=color,
+                fg='white'
+            ).pack(side=tk.RIGHT, padx=15)
+
+            frame_contenido = tk.Frame(frame, bg=COLORES['card_bg'])
+            frame_contenido.pack(fill=tk.X, padx=15, pady=10)
+
+            info = f"🌍 Coords: {lat:.4f}, {lon:.4f} | 📏 Radio: {radio}m"
+            if cat_sugerida:
+                info += f" | 📂 Categoría: {cat_sugerida}"
+            if cuenta_sugerida:
+                info += f" | 💳 Cuenta: {cuenta_sugerida}"
+
+            tk.Label(
+                frame_contenido,
+                text=info,
+                font=('Segoe UI', 10),
+                bg=COLORES['card_bg']
+            ).pack(anchor='w', pady=3)
+
+            # Botones de acción
+            frame_botones = tk.Frame(frame_contenido, bg=COLORES['card_bg'])
+            frame_botones.pack(anchor='w', pady=5)
+
+            def toggle_zona(zona_id=id_z, actual=activa):
+                cursor = self.db.conn.cursor()
+                cursor.execute('UPDATE reglas_geofence SET activa=? WHERE id=?',
+                             (0 if actual else 1, zona_id))
+                self.db.conn.commit()
+                self.mostrar_geofence()
+
+            tk.Button(
+                frame_botones,
+                text="⏸️ Pausar" if activa else "▶️ Activar",
+                font=('Segoe UI', 9),
+                bg=COLORES['warning'] if activa else COLORES['success'],
+                fg='white',
+                relief=tk.FLAT,
+                cursor='hand2',
+                command=toggle_zona,
+                padx=10,
+                pady=4
+            ).pack(side=tk.LEFT, padx=3)
+
+            def eliminar_zona(zona_id=id_z):
+                if messagebox.askyesno("Confirmar", "¿Eliminar esta zona de geofence?"):
+                    cursor = self.db.conn.cursor()
+                    cursor.execute('DELETE FROM reglas_geofence WHERE id=?', (zona_id,))
+                    self.db.conn.commit()
+                    self.mostrar_geofence()
+
+            tk.Button(
+                frame_botones,
+                text="🗑️ Eliminar",
+                font=('Segoe UI', 9),
+                bg=COLORES['danger'],
+                fg='white',
+                relief=tk.FLAT,
+                cursor='hand2',
+                command=eliminar_zona,
+                padx=10,
+                pady=4
+            ).pack(side=tk.LEFT, padx=3)
+
+    def ventana_nueva_geofence(self):
+        """Ventana para crear nueva zona de geofence"""
+        v = tk.Toplevel(self.root)
+        v.title("📍 Nueva Zona Geofence")
+        v.geometry("500x550")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+        v.grab_set()
+
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (500 // 2)
+        y = (v.winfo_screenheight() // 2) - (550 // 2)
+        v.geometry(f'500x550+{x}+{y}')
+
+        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(
+            frame,
+            text="📍 Definir Zona de Geofence",
+            font=('Segoe UI', 16, 'bold'),
+            bg=COLORES['background']
+        ).pack(pady=10)
+
+        tk.Label(frame, text="📝 Nombre del lugar:", bg=COLORES['background']).pack(anchor='w', pady=3)
+        entry_nombre = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_nombre.pack(fill=tk.X, pady=3)
+        entry_nombre.insert(0, "Ej: Supermercado Carrefour")
+
+        tk.Label(frame, text="🌍 Latitud:", bg=COLORES['background']).pack(anchor='w', pady=3)
+        entry_lat = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_lat.pack(fill=tk.X, pady=3)
+        entry_lat.insert(0, "-34.6037")
+
+        tk.Label(frame, text="🌍 Longitud:", bg=COLORES['background']).pack(anchor='w', pady=3)
+        entry_lon = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_lon.pack(fill=tk.X, pady=3)
+        entry_lon.insert(0, "-58.3816")
+
+        tk.Label(
+            frame,
+            text="💡 Podés usar Google Maps: click derecho → copiar coordenadas",
+            font=('Segoe UI', 9),
+            bg=COLORES['background'],
+            fg=COLORES['text_secondary']
+        ).pack(anchor='w', pady=3)
+
+        tk.Label(frame, text="📏 Radio (metros):", bg=COLORES['background']).pack(anchor='w', pady=3)
+        entry_radio = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_radio.pack(fill=tk.X, pady=3)
+        entry_radio.insert(0, "100")
+
+        tk.Label(frame, text="📂 Categoría sugerida (opcional):", bg=COLORES['background']).pack(anchor='w', pady=3)
+        combo_cat = ttk.Combobox(frame, values=[c[1] for c in self.db.obtener_categorias()],
+                                 font=('Segoe UI', 11))
+        combo_cat.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="💳 Cuenta sugerida (opcional):", bg=COLORES['background']).pack(anchor='w', pady=3)
+        combo_cuenta = ttk.Combobox(frame, values=[c[1] for c in self.db.obtener_tarjetas()],
+                                    font=('Segoe UI', 11))
+        combo_cuenta.pack(fill=tk.X, pady=3)
+
+        def guardar_zona():
+            nombre = entry_nombre.get().strip()
+            if not nombre or nombre.startswith("Ej:"):
+                messagebox.showwarning("Datos incompletos", "Ingresá un nombre para la zona")
+                return
+
+            try:
+                lat = float(entry_lat.get())
+                lon = float(entry_lon.get())
+                radio = int(entry_radio.get())
+            except ValueError:
+                messagebox.showwarning("Datos inválidos", "Verificá que las coordenadas y radio sean números válidos")
+                return
+
+            cursor = self.db.conn.cursor()
+            cursor.execute('''
+                INSERT INTO reglas_geofence (nombre, latitud, longitud, radio_metros,
+                                            categoria_sugerida, cuenta_sugerida, activa)
+                VALUES (?, ?, ?, ?, ?, ?, 1)
+            ''', (
+                nombre, lat, lon, radio,
+                combo_cat.get() if combo_cat.get() else None,
+                combo_cuenta.get() if combo_cuenta.get() else None
+            ))
+            self.db.conn.commit()
+
+            messagebox.showinfo("Éxito", "Zona de geofence creada correctamente")
+            v.destroy()
+            self.mostrar_geofence()
+
+        tk.Button(
+            frame,
+            text="💾 Guardar Zona",
+            font=('Segoe UI', 12, 'bold'),
+            bg=COLORES['success'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=guardar_zona,
+            pady=10
+        ).pack(pady=15, fill=tk.X)
 
     def ventana_conversor(self):
         """Ventana de conversor de monedas múltiples"""
