@@ -1638,11 +1638,14 @@ class GestorGastos:
             ("📅 Cuentas por Pagar", 'cuentas_pagar', self.mostrar_cuentas_por_pagar),
             ("👥 Deudas Compartidas", 'deudas', self.mostrar_deudas),
             ("🎯 Metas de Ahorro", 'metas', self.mostrar_metas),
+            ("💰 Ahorro Automático", 'ahorro_auto', self.mostrar_ahorro_automatico),
+            ("📺 Suscripciones", 'suscripciones', self.mostrar_suscripciones),
             ("💳 Tarjetas", 'tarjetas', self.mostrar_tarjetas),
             ("🔄 Recurrentes", 'recurrentes', self.mostrar_recurrentes),
             ("📊 Presupuestos", 'presupuestos', self.mostrar_presupuestos),
             ("⚙️ Reglas de Contexto", 'reglas_contexto', self.mostrar_reglas_contexto),
             ("📍 Geofence", 'geofence', self.mostrar_geofence),
+            ("🏆 FinScore", 'finscore', self.mostrar_finscore),
             ("🎮 Logros", 'logros', self.mostrar_logros),
             ("💱 Conversor", 'conversor', self.ventana_conversor),
         ]
@@ -3659,6 +3662,729 @@ class GestorGastos:
             command=guardar_zona,
             pady=10
         ).pack(pady=15, fill=tk.X)
+
+    def mostrar_ahorro_automatico(self):
+        """Vista de reglas de ahorro automático (inspirado en Plum)"""
+        frame_btn = tk.Frame(self.frame_contenido, bg=COLORES['background'])
+        frame_btn.pack(fill=tk.X, padx=15, pady=10)
+
+        tk.Button(
+            frame_btn,
+            text="➕ Nueva Regla de Ahorro",
+            font=('Segoe UI', 10, 'bold'),
+            bg=COLORES['success'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=self.ventana_nueva_regla_ahorro,
+            padx=15,
+            pady=8
+        ).pack(side=tk.LEFT)
+
+        # Info card con total ahorrado
+        cursor = self.db.conn.cursor()
+        cursor.execute('SELECT SUM(monto_ahorrado_total) FROM reglas_ahorro_auto WHERE activa=1')
+        total_ahorrado = cursor.fetchone()[0] or 0
+
+        frame_info = tk.Frame(frame_btn, bg=COLORES['info'], relief=tk.RAISED, bd=2)
+        frame_info.pack(side=tk.RIGHT, padx=10)
+
+        tk.Label(
+            frame_info,
+            text=f"💰 Total Ahorrado: ${total_ahorrado:,.0f}",
+            font=('Segoe UI', 11, 'bold'),
+            bg=COLORES['info'],
+            fg='white',
+            padx=15,
+            pady=8
+        ).pack()
+
+        canvas = tk.Canvas(self.frame_contenido, bg=COLORES['background'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(self.frame_contenido, orient="vertical", command=canvas.yview)
+
+        frame_lista = tk.Frame(canvas, bg=COLORES['background'])
+        frame_lista.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+        canvas.create_window((0, 0), window=frame_lista, anchor="nw", width=1100)
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True, padx=15)
+        scrollbar.pack(side="right", fill="y")
+
+        reglas = self.db.obtener_reglas_ahorro_auto(solo_activas=False)
+
+        if not reglas:
+            tk.Label(
+                frame_lista,
+                text="💰 No hay reglas de ahorro automático configuradas\n\n¿Querés ahorrar sin pensarlo? Creá reglas automáticas:\n• Redondeo: ahorrá la diferencia al redondear tus gastos\n• Payday: ahorrá un % cuando llega tu sueldo\n• Desafío 52 semanas: ahorrá cada semana",
+                font=('Segoe UI', 11),
+                bg=COLORES['background'],
+                fg=COLORES['text_secondary'],
+                justify=tk.CENTER
+            ).pack(pady=60)
+            return
+
+        for regla in reglas:
+            id_r, nombre, tipo, activa, modo, meta_id, ultima_ej, monto_total, config = regla
+
+            frame = tk.Frame(frame_lista, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+            frame.pack(fill=tk.X, pady=5, padx=5)
+
+            # Color según estado
+            color = COLORES['success'] if activa else COLORES['text_secondary']
+            estado = "✅ Activa" if activa else "⏸️ Pausada"
+
+            frame_header = tk.Frame(frame, bg=color, height=35)
+            frame_header.pack(fill=tk.X)
+            frame_header.pack_propagate(False)
+
+            tipo_icons = {
+                'redondeo': '🔄',
+                'payday': '💵',
+                '52semanas': '📅',
+                'dias_lluvia': '🌧️',
+                'porcentaje_ingreso': '📊'
+            }
+            icon = tipo_icons.get(tipo, '💰')
+
+            tk.Label(
+                frame_header,
+                text=f"{icon} {nombre}",
+                font=('Segoe UI', 11, 'bold'),
+                bg=color,
+                fg='white'
+            ).pack(side=tk.LEFT, padx=15, pady=7)
+
+            tk.Label(
+                frame_header,
+                text=estado,
+                font=('Segoe UI', 9),
+                bg=color,
+                fg='white'
+            ).pack(side=tk.RIGHT, padx=15)
+
+            frame_contenido = tk.Frame(frame, bg=COLORES['card_bg'])
+            frame_contenido.pack(fill=tk.X, padx=15, pady=10)
+
+            # Mostrar detalles
+            modos_display = {
+                'timido': '😊 Tímido',
+                'moderado': '😎 Moderado',
+                'agresivo': '💪 Agresivo',
+                'bestia': '🦁 A lo Bestia'
+            }
+            modo_text = modos_display.get(modo, modo)
+
+            info = f"Tipo: {tipo} | Modo: {modo_text}\n💰 Ahorrado hasta ahora: ${monto_total:,.0f}"
+            if ultima_ej:
+                info += f" | Última ejecución: {ultima_ej}"
+
+            tk.Label(
+                frame_contenido,
+                text=info,
+                font=('Segoe UI', 10),
+                bg=COLORES['card_bg'],
+                justify=tk.LEFT
+            ).pack(anchor='w', pady=3)
+
+            # Botones de acción
+            frame_botones = tk.Frame(frame_contenido, bg=COLORES['card_bg'])
+            frame_botones.pack(anchor='w', pady=5)
+
+            def toggle_regla(regla_id=id_r, actual=activa):
+                cursor = self.db.conn.cursor()
+                cursor.execute('UPDATE reglas_ahorro_auto SET activa=? WHERE id=?',
+                             (0 if actual else 1, regla_id))
+                self.db.conn.commit()
+                self.mostrar_ahorro_automatico()
+
+            tk.Button(
+                frame_botones,
+                text="⏸️ Pausar" if activa else "▶️ Activar",
+                font=('Segoe UI', 9),
+                bg=COLORES['warning'] if activa else COLORES['success'],
+                fg='white',
+                relief=tk.FLAT,
+                cursor='hand2',
+                command=toggle_regla,
+                padx=10,
+                pady=4
+            ).pack(side=tk.LEFT, padx=3)
+
+            def eliminar_regla(regla_id=id_r):
+                if messagebox.askyesno("Confirmar", "¿Eliminar esta regla de ahorro?"):
+                    cursor = self.db.conn.cursor()
+                    cursor.execute('DELETE FROM reglas_ahorro_auto WHERE id=?', (regla_id,))
+                    self.db.conn.commit()
+                    self.mostrar_ahorro_automatico()
+
+            tk.Button(
+                frame_botones,
+                text="🗑️ Eliminar",
+                font=('Segoe UI', 9),
+                bg=COLORES['danger'],
+                fg='white',
+                relief=tk.FLAT,
+                cursor='hand2',
+                command=eliminar_regla,
+                padx=10,
+                pady=4
+            ).pack(side=tk.LEFT, padx=3)
+
+    def ventana_nueva_regla_ahorro(self):
+        """Ventana para crear nueva regla de ahorro automático"""
+        v = tk.Toplevel(self.root)
+        v.title("💰 Nueva Regla de Ahorro Automático")
+        v.geometry("500x550")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+        v.grab_set()
+
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (500 // 2)
+        y = (v.winfo_screenheight() // 2) - (550 // 2)
+        v.geometry(f'500x550+{x}+{y}')
+
+        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(
+            frame,
+            text="💰 Crear Regla de Ahorro Automático",
+            font=('Segoe UI', 16, 'bold'),
+            bg=COLORES['background']
+        ).pack(pady=10)
+
+        tk.Label(frame, text="📝 Nombre de la regla:", bg=COLORES['background']).pack(anchor='w', pady=3)
+        entry_nombre = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_nombre.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="🎯 Tipo de Regla:", bg=COLORES['background']).pack(anchor='w', pady=3)
+        combo_tipo = ttk.Combobox(frame, values=['redondeo', 'payday', '52semanas'],
+                                   state='readonly', font=('Segoe UI', 11))
+        combo_tipo.set('redondeo')
+        combo_tipo.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="💪 Modo de Agresividad:", bg=COLORES['background']).pack(anchor='w', pady=3)
+        combo_modo = ttk.Combobox(frame, values=['timido', 'moderado', 'agresivo', 'bestia'],
+                                   state='readonly', font=('Segoe UI', 11))
+        combo_modo.set('moderado')
+        combo_modo.pack(fill=tk.X, pady=3)
+
+        # Descripción dinámica
+        label_desc = tk.Label(
+            frame,
+            text="",
+            font=('Segoe UI', 9),
+            bg=COLORES['background'],
+            fg=COLORES['text_secondary'],
+            justify=tk.LEFT,
+            wraplength=450
+        )
+        label_desc.pack(pady=10, fill=tk.X)
+
+        def actualizar_descripcion(event=None):
+            tipo = combo_tipo.get()
+            modo = combo_modo.get()
+
+            descripciones = {
+                'redondeo': {
+                    'timido': '🔄 Redondea al peso más cercano y ahorra la diferencia',
+                    'moderado': '🔄 Redondea a los $10 y ahorra la diferencia',
+                    'agresivo': '🔄 Redondea a los $50 y ahorra la diferencia',
+                    'bestia': '🔄 Redondea a los $100 y ahorra la diferencia'
+                },
+                'payday': {
+                    'timido': '💵 Ahorra 2% cuando llega tu sueldo',
+                    'moderado': '💵 Ahorra 5% cuando llega tu sueldo',
+                    'agresivo': '💵 Ahorra 10% cuando llega tu sueldo',
+                    'bestia': '💵 Ahorra 15% cuando llega tu sueldo'
+                },
+                '52semanas': {
+                    'timido': '📅 Ahorra $10 por semana durante 52 semanas',
+                    'moderado': '📅 Ahorra $50 por semana durante 52 semanas',
+                    'agresivo': '📅 Ahorra $100 por semana durante 52 semanas',
+                    'bestia': '📅 Ahorra $200 por semana durante 52 semanas'
+                }
+            }
+
+            desc = descripciones.get(tipo, {}).get(modo, '')
+            label_desc.config(text=desc)
+
+        combo_tipo.bind('<<ComboboxSelected>>', actualizar_descripcion)
+        combo_modo.bind('<<ComboboxSelected>>', actualizar_descripcion)
+        actualizar_descripcion()
+
+        tk.Label(frame, text="🎯 Meta destino (opcional):", bg=COLORES['background']).pack(anchor='w', pady=3)
+
+        # Obtener metas disponibles
+        cursor = self.db.conn.cursor()
+        cursor.execute('SELECT id, nombre FROM metas_ahorro WHERE completada=0')
+        metas = cursor.fetchall()
+        metas_nombres = ['Ninguna'] + [f"{m[1]}" for m in metas]
+
+        combo_meta = ttk.Combobox(frame, values=metas_nombres, font=('Segoe UI', 11))
+        combo_meta.set('Ninguna')
+        combo_meta.pack(fill=tk.X, pady=3)
+
+        def guardar_regla():
+            nombre = entry_nombre.get().strip()
+            if not nombre:
+                messagebox.showwarning("Datos incompletos", "Ingresá un nombre para la regla")
+                return
+
+            # Obtener ID de meta si seleccionó una
+            meta_id = None
+            if combo_meta.get() != 'Ninguna':
+                idx = combo_meta.current() - 1
+                if idx >= 0 and idx < len(metas):
+                    meta_id = metas[idx][0]
+
+            self.db.crear_regla_ahorro_auto(
+                nombre=nombre,
+                tipo_regla=combo_tipo.get(),
+                modo_agresividad=combo_modo.get(),
+                meta_id=meta_id
+            )
+
+            messagebox.showinfo("Éxito", "Regla de ahorro creada correctamente")
+            v.destroy()
+            self.mostrar_ahorro_automatico()
+
+        tk.Button(
+            frame,
+            text="💾 Guardar Regla",
+            font=('Segoe UI', 12, 'bold'),
+            bg=COLORES['success'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=guardar_regla,
+            pady=10
+        ).pack(pady=15, fill=tk.X)
+
+    def mostrar_suscripciones(self):
+        """Vista de suscripciones (inspirado en Emma)"""
+        frame_btn = tk.Frame(self.frame_contenido, bg=COLORES['background'])
+        frame_btn.pack(fill=tk.X, padx=15, pady=10)
+
+        tk.Button(
+            frame_btn,
+            text="➕ Nueva Suscripción",
+            font=('Segoe UI', 10, 'bold'),
+            bg=COLORES['success'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=self.ventana_nueva_suscripcion,
+            padx=15,
+            pady=8
+        ).pack(side=tk.LEFT)
+
+        # Info card con gasto mensual
+        gasto_mensual = self.db.calcular_gasto_suscripciones_mensual()
+
+        frame_info = tk.Frame(frame_btn, bg=COLORES['danger'], relief=tk.RAISED, bd=2)
+        frame_info.pack(side=tk.RIGHT, padx=10)
+
+        tk.Label(
+            frame_info,
+            text=f"📺 Gasto Mensual: ${gasto_mensual:,.0f}",
+            font=('Segoe UI', 11, 'bold'),
+            bg=COLORES['danger'],
+            fg='white',
+            padx=15,
+            pady=8
+        ).pack()
+
+        # Detectar suscripciones no usadas
+        no_usadas = self.db.detectar_suscripciones_no_usadas()
+        if no_usadas:
+            frame_alerta = tk.Frame(self.frame_contenido, bg=COLORES['warning'], relief=tk.RAISED, bd=2)
+            frame_alerta.pack(fill=tk.X, padx=15, pady=10)
+
+            ahorro_potencial = sum(m for n, m, mon in no_usadas)
+            texto_alerta = f"⚠️ ¡Atención! Detectamos {len(no_usadas)} suscripción(es) que no usaste en 60 días.\n"
+            texto_alerta += f"Podrías ahorrar ${ahorro_potencial:,.0f}/mes cancelándolas: {', '.join(n for n, m, mon in no_usadas)}"
+
+            tk.Label(
+                frame_alerta,
+                text=texto_alerta,
+                font=('Segoe UI', 10, 'bold'),
+                bg=COLORES['warning'],
+                fg='white',
+                padx=15,
+                pady=10,
+                wraplength=1000,
+                justify=tk.LEFT
+            ).pack()
+
+        canvas = tk.Canvas(self.frame_contenido, bg=COLORES['background'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(self.frame_contenido, orient="vertical", command=canvas.yview)
+
+        frame_lista = tk.Frame(canvas, bg=COLORES['background'])
+        frame_lista.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+        canvas.create_window((0, 0), window=frame_lista, anchor="nw", width=1100)
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True, padx=15)
+        scrollbar.pack(side="right", fill="y")
+
+        suscripciones = self.db.obtener_suscripciones(solo_activas=False)
+
+        if not suscripciones:
+            tk.Label(
+                frame_lista,
+                text="📺 No hay suscripciones registradas\n\nRegistrá tus suscripciones (Netflix, Spotify, Gym, etc.)\ny controlá cuánto gastás mensualmente",
+                font=('Segoe UI', 11),
+                bg=COLORES['background'],
+                fg=COLORES['text_secondary'],
+                justify=tk.CENTER
+            ).pack(pady=60)
+            return
+
+        for susc in suscripciones:
+            id_s, nombre, cat, monto, moneda, freq, dia_cobro, fecha_inicio, prox_cobro, activa = susc[:10]
+
+            frame = tk.Frame(frame_lista, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+            frame.pack(fill=tk.X, pady=5, padx=5)
+
+            # Verificar si es suscripción no usada
+            es_no_usada = any(n == nombre for n, m, mon in no_usadas)
+            color = COLORES['warning'] if es_no_usada else (COLORES['info'] if activa else COLORES['text_secondary'])
+            estado = "⚠️ No usada" if es_no_usada else ("✅ Activa" if activa else "⏸️ Cancelada")
+
+            frame_header = tk.Frame(frame, bg=color, height=35)
+            frame_header.pack(fill=tk.X)
+            frame_header.pack_propagate(False)
+
+            tk.Label(
+                frame_header,
+                text=f"📺 {nombre}",
+                font=('Segoe UI', 11, 'bold'),
+                bg=color,
+                fg='white'
+            ).pack(side=tk.LEFT, padx=15, pady=7)
+
+            tk.Label(
+                frame_header,
+                text=estado,
+                font=('Segoe UI', 9),
+                bg=color,
+                fg='white'
+            ).pack(side=tk.RIGHT, padx=15)
+
+            frame_contenido = tk.Frame(frame, bg=COLORES['card_bg'])
+            frame_contenido.pack(fill=tk.X, padx=15, pady=10)
+
+            # Calcular monto mensual
+            freq_mult = {'mensual': 1, 'anual': 1/12, 'semanal': 4.33}
+            monto_mes = monto * freq_mult.get(freq, 1)
+
+            info = f"💰 {moneda} ${monto:,.0f} / {freq}"
+            if freq != 'mensual':
+                info += f" → ${monto_mes:,.0f}/mes"
+            if prox_cobro:
+                info += f" | 📅 Próximo cobro: {prox_cobro}"
+
+            tk.Label(
+                frame_contenido,
+                text=info,
+                font=('Segoe UI', 10),
+                bg=COLORES['card_bg']
+            ).pack(anchor='w', pady=3)
+
+            # Botones de acción
+            frame_botones = tk.Frame(frame_contenido, bg=COLORES['card_bg'])
+            frame_botones.pack(anchor='w', pady=5)
+
+            def toggle_susc(susc_id=id_s, actual=activa):
+                cursor = self.db.conn.cursor()
+                cursor.execute('UPDATE suscripciones SET activa=? WHERE id=?',
+                             (0 if actual else 1, susc_id))
+                self.db.conn.commit()
+                self.mostrar_suscripciones()
+
+            tk.Button(
+                frame_botones,
+                text="🚫 Cancelar" if activa else "▶️ Reactivar",
+                font=('Segoe UI', 9),
+                bg=COLORES['danger'] if activa else COLORES['success'],
+                fg='white',
+                relief=tk.FLAT,
+                cursor='hand2',
+                command=toggle_susc,
+                padx=10,
+                pady=4
+            ).pack(side=tk.LEFT, padx=3)
+
+            def eliminar_susc(susc_id=id_s):
+                if messagebox.askyesno("Confirmar", "¿Eliminar esta suscripción?"):
+                    cursor = self.db.conn.cursor()
+                    cursor.execute('DELETE FROM suscripciones WHERE id=?', (susc_id,))
+                    self.db.conn.commit()
+                    self.mostrar_suscripciones()
+
+            tk.Button(
+                frame_botones,
+                text="🗑️ Eliminar",
+                font=('Segoe UI', 9),
+                bg=COLORES['text_secondary'],
+                fg='white',
+                relief=tk.FLAT,
+                cursor='hand2',
+                command=eliminar_susc,
+                padx=10,
+                pady=4
+            ).pack(side=tk.LEFT, padx=3)
+
+    def ventana_nueva_suscripcion(self):
+        """Ventana para crear nueva suscripción"""
+        v = tk.Toplevel(self.root)
+        v.title("📺 Nueva Suscripción")
+        v.geometry("450x500")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+        v.grab_set()
+
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (450 // 2)
+        y = (v.winfo_screenheight() // 2) - (500 // 2)
+        v.geometry(f'450x500+{x}+{y}')
+
+        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(
+            frame,
+            text="📺 Registrar Suscripción",
+            font=('Segoe UI', 16, 'bold'),
+            bg=COLORES['background']
+        ).pack(pady=10)
+
+        tk.Label(frame, text="📝 Nombre (ej: Netflix, Spotify, Gym):", bg=COLORES['background']).pack(anchor='w', pady=3)
+        entry_nombre = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_nombre.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="💰 Monto:", bg=COLORES['background']).pack(anchor='w', pady=3)
+        entry_monto = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_monto.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="📅 Frecuencia:", bg=COLORES['background']).pack(anchor='w', pady=3)
+        combo_freq = ttk.Combobox(frame, values=['mensual', 'anual', 'semanal'],
+                                   state='readonly', font=('Segoe UI', 11))
+        combo_freq.set('mensual')
+        combo_freq.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="📆 Día de cobro (1-31):", bg=COLORES['background']).pack(anchor='w', pady=3)
+        entry_dia = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_dia.insert(0, str(datetime.date.today().day))
+        entry_dia.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="📂 Categoría (opcional):", bg=COLORES['background']).pack(anchor='w', pady=3)
+        combo_cat = ttk.Combobox(frame, values=[c[1] for c in self.db.obtener_categorias()],
+                                 font=('Segoe UI', 11))
+        combo_cat.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="🏢 Proveedor (opcional):", bg=COLORES['background']).pack(anchor='w', pady=3)
+        entry_proveedor = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_proveedor.pack(fill=tk.X, pady=3)
+
+        def guardar_suscripcion():
+            nombre = entry_nombre.get().strip()
+            if not nombre:
+                messagebox.showwarning("Datos incompletos", "Ingresá el nombre de la suscripción")
+                return
+
+            try:
+                monto = float(entry_monto.get())
+                dia = int(entry_dia.get())
+                if dia < 1 or dia > 31:
+                    raise ValueError("Día inválido")
+            except ValueError:
+                messagebox.showwarning("Datos inválidos", "Verificá el monto y día de cobro")
+                return
+
+            self.db.crear_suscripcion(
+                nombre=nombre,
+                monto=monto,
+                frecuencia=combo_freq.get(),
+                dia_cobro=dia,
+                categoria=combo_cat.get() if combo_cat.get() else None,
+                proveedor=entry_proveedor.get() if entry_proveedor.get() else None
+            )
+
+            messagebox.showinfo("Éxito", "Suscripción registrada correctamente")
+            v.destroy()
+            self.mostrar_suscripciones()
+
+        tk.Button(
+            frame,
+            text="💾 Guardar Suscripción",
+            font=('Segoe UI', 12, 'bold'),
+            bg=COLORES['success'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=guardar_suscripcion,
+            pady=10
+        ).pack(pady=15, fill=tk.X)
+
+    def mostrar_finscore(self):
+        """Dashboard de FinScore (inspirado en Fintonic)"""
+        # Calcular FinScore actual
+        puntuacion = self.db.calcular_finscore()
+
+        # Header con puntuación grande
+        frame_header = tk.Frame(self.frame_contenido, bg=COLORES['primary'], height=150)
+        frame_header.pack(fill=tk.X, padx=15, pady=15)
+        frame_header.pack_propagate(False)
+
+        # Determinar color y mensaje según puntuación
+        if puntuacion >= 800:
+            color_score = '#10b981'  # Verde
+            mensaje = "🎉 ¡Excelente salud financiera!"
+            emoji = "🌟"
+        elif puntuacion >= 600:
+            color_score = '#10b981'  # Verde
+            mensaje = "😊 Buena salud financiera"
+            emoji = "👍"
+        elif puntuacion >= 400:
+            color_score = '#f59e0b'  # Naranja
+            mensaje = "🤔 Salud financiera regular"
+            emoji = "💪"
+        else:
+            color_score = '#ef4444'  # Rojo
+            mensaje = "😟 Necesitás mejorar"
+            emoji = "📈"
+
+        tk.Label(
+            frame_header,
+            text="🏆 Tu FinScore",
+            font=('Segoe UI', 16, 'bold'),
+            bg=COLORES['primary'],
+            fg='white'
+        ).pack(pady=(20, 5))
+
+        tk.Label(
+            frame_header,
+            text=f"{puntuacion}",
+            font=('Segoe UI', 48, 'bold'),
+            bg=COLORES['primary'],
+            fg=color_score
+        ).pack()
+
+        tk.Label(
+            frame_header,
+            text=f"{emoji} {mensaje}",
+            font=('Segoe UI', 12),
+            bg=COLORES['primary'],
+            fg='white'
+        ).pack()
+
+        # Explicación de componentes
+        frame_componentes = tk.Frame(self.frame_contenido, bg=COLORES['background'])
+        frame_componentes.pack(fill=tk.BOTH, expand=True, padx=15, pady=10)
+
+        tk.Label(
+            frame_componentes,
+            text="📊 Componentes del FinScore",
+            font=('Segoe UI', 14, 'bold'),
+            bg=COLORES['background']
+        ).pack(pady=10)
+
+        # Obtener detalles del último cálculo
+        cursor = self.db.conn.cursor()
+        cursor.execute('''
+            SELECT ahorro_mensual, gasto_promedio, deudas_totales, racha_dias
+            FROM finscore_historico ORDER BY fecha DESC LIMIT 1
+        ''')
+        detalles = cursor.fetchone()
+
+        if detalles:
+            ahorro, gasto, deudas, racha = detalles
+
+            componentes = [
+                ("💰 Ahorro Mensual", f"${ahorro:,.0f}", "30% del score", COLORES['success']),
+                ("📊 Cumplimiento Presupuestos", "Ver en Presupuestos", "25% del score", COLORES['info']),
+                ("🏦 Control de Deudas", f"${deudas:,.0f} pendientes", "25% del score", COLORES['warning']),
+                ("🔥 Racha de Registro", f"{racha} días este mes", "20% del score", COLORES['secondary'])
+            ]
+
+            for titulo, valor, peso, color in componentes:
+                frame_comp = tk.Frame(frame_componentes, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+                frame_comp.pack(fill=tk.X, pady=5)
+
+                frame_comp_header = tk.Frame(frame_comp, bg=color, height=30)
+                frame_comp_header.pack(fill=tk.X)
+                frame_comp_header.pack_propagate(False)
+
+                tk.Label(
+                    frame_comp_header,
+                    text=titulo,
+                    font=('Segoe UI', 11, 'bold'),
+                    bg=color,
+                    fg='white'
+                ).pack(side=tk.LEFT, padx=15, pady=5)
+
+                tk.Label(
+                    frame_comp_header,
+                    text=peso,
+                    font=('Segoe UI', 9),
+                    bg=color,
+                    fg='white'
+                ).pack(side=tk.RIGHT, padx=15)
+
+                tk.Label(
+                    frame_comp,
+                    text=valor,
+                    font=('Segoe UI', 12, 'bold'),
+                    bg=COLORES['card_bg'],
+                    fg=color,
+                    pady=10
+                ).pack()
+
+        # Recomendaciones
+        frame_recs = tk.Frame(self.frame_contenido, bg=COLORES['light'], relief=tk.RAISED, bd=2)
+        frame_recs.pack(fill=tk.X, padx=15, pady=10)
+
+        tk.Label(
+            frame_recs,
+            text="💡 Recomendaciones para mejorar tu FinScore",
+            font=('Segoe UI', 12, 'bold'),
+            bg=COLORES['light'],
+            pady=10
+        ).pack()
+
+        recomendaciones = []
+        if detalles:
+            if ahorro < 0:
+                recomendaciones.append("• Intentá gastar menos de lo que ganás este mes")
+            if deudas > 10000:
+                recomendaciones.append("• Pagá tus deudas compartidas para mejorar tu score")
+            if racha < 20:
+                recomendaciones.append("• Registrá tus gastos diariamente para mejorar consistencia")
+
+        if not recomendaciones:
+            recomendaciones.append("• ¡Seguí así! Estás manejando bien tus finanzas")
+
+        for rec in recomendaciones:
+            tk.Label(
+                frame_recs,
+                text=rec,
+                font=('Segoe UI', 10),
+                bg=COLORES['light'],
+                justify=tk.LEFT,
+                anchor='w'
+            ).pack(padx=20, pady=2, fill=tk.X)
+
+        tk.Label(
+            frame_recs,
+            text="",
+            bg=COLORES['light'],
+            pady=5
+        ).pack()
 
     def ventana_conversor(self):
         """Ventana de conversor de monedas múltiples"""
