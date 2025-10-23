@@ -1,7 +1,13 @@
 """
-💰 GESTOR DE GASTOS PERSONAL v6.0 - VERSIÓN CON CONTEXTO E IA
+💰 GESTOR DE GASTOS PERSONAL v7.0 - VERSIÓN PREMIUM CON IA Y AHORRO AUTOMÁTICO
 Aplicación completa para gestión de finanzas personales
-Con reglas de contexto (clima, hora, ubicación) y geofencing
+Con características inspiradas en Fintonic, Plum y Emma:
+- Ahorro automático inteligente (redondeo, payday detection)
+- Tracking de suscripciones y detección de gastos no usados
+- FinScore: puntuación de salud financiera
+- Reconocimiento de voz para registro rápido
+- Geofencing y reglas de contexto
+
 Autor: Maximiliano Burgos
 Año: 2025
 
@@ -24,19 +30,46 @@ from pathlib import Path
 import warnings
 import threading
 import shutil
+import sys
+import os
 
 # === CONFIGURACION ===
 warnings.filterwarnings("ignore", category=UserWarning, module="matplotlib")
 plt.rcParams['font.family'] = 'DejaVu Sans'
 
-# === RUTAS ===
-RUTA_BASE = Path(__file__).parent
+# === RUTAS - COMPATIBLE CON .EXE ===
+def obtener_ruta_base():
+    """
+    Obtiene la ruta base donde guardar datos.
+    Si es .exe, usa AppData en Windows o home en Linux/Mac.
+    Si es script Python, usa el directorio del script.
+    """
+    if getattr(sys, 'frozen', False):
+        # Corriendo como .exe (PyInstaller)
+        if sys.platform == 'win32':
+            # Windows: usar AppData
+            app_data = os.environ.get('APPDATA')
+            ruta = Path(app_data) / "GestorGastos"
+        else:
+            # Linux/Mac: usar home directory
+            ruta = Path.home() / ".gestor_gastos"
+    else:
+        # Corriendo como script normal
+        ruta = Path(__file__).parent
+
+    return ruta
+
+RUTA_BASE = obtener_ruta_base()
 RUTA_DATA = RUTA_BASE / "data"
 RUTA_DB = RUTA_DATA / "gastos.db"
 RUTA_BACKUPS = RUTA_DATA / "backups"
 
+# Crear directorios si no existen
 for ruta in [RUTA_DATA, RUTA_BACKUPS]:
     ruta.mkdir(parents=True, exist_ok=True)
+
+print(f"📁 Guardando datos en: {RUTA_BASE}")
+print(f"🗄️ Base de datos: {RUTA_DB}")
 
 # === COLORES MODERNOS ===
 COLORES = {
@@ -350,6 +383,53 @@ class Database:
                 categoria_sugerida TEXT,
                 cuenta_sugerida TEXT,
                 activa INTEGER DEFAULT 1
+            )
+        ''')
+
+        # Nuevas tablas inspiradas en Plum, Emma y Fintonic
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS reglas_ahorro_auto (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                tipo_regla TEXT NOT NULL,
+                activa INTEGER DEFAULT 1,
+                modo_agresividad TEXT DEFAULT 'moderado',
+                meta_destino_id INTEGER,
+                ultima_ejecucion TEXT,
+                monto_ahorrado_total REAL DEFAULT 0,
+                configuracion TEXT,
+                FOREIGN KEY (meta_destino_id) REFERENCES metas_ahorro(id)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS suscripciones (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                categoria TEXT,
+                monto REAL NOT NULL,
+                moneda TEXT DEFAULT 'ARS',
+                frecuencia TEXT NOT NULL,
+                dia_cobro INTEGER,
+                fecha_inicio TEXT NOT NULL,
+                fecha_proximo_cobro TEXT,
+                activa INTEGER DEFAULT 1,
+                recordatorio_dias_antes INTEGER DEFAULT 3,
+                proveedor TEXT,
+                notas TEXT
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS finscore_historico (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fecha TEXT NOT NULL,
+                puntuacion INTEGER NOT NULL,
+                ahorro_mensual REAL,
+                gasto_promedio REAL,
+                deudas_totales REAL,
+                cumplimiento_presupuestos REAL,
+                racha_dias INTEGER DEFAULT 0
             )
         ''')
 
@@ -895,6 +975,279 @@ class Database:
                 return {'categoria': cat_sug, 'cuenta': cuenta_sug, 'lugar': nombre}
 
         return None
+
+    # === AHORRO AUTOMÁTICO (Inspirado en Plum) ===
+    def crear_regla_ahorro_auto(self, nombre, tipo_regla, modo_agresividad='moderado', meta_id=None, config=None):
+        """
+        Crea regla de ahorro automático
+        Tipos: 'payday', 'redondeo', '52semanas', 'dias_lluvia', 'porcentaje_ingreso'
+        Modos: 'timido', 'moderado', 'agresivo', 'bestia'
+        """
+        cursor = self.conn.cursor()
+        config_json = json.dumps(config) if config else None
+        cursor.execute('''
+            INSERT INTO reglas_ahorro_auto (nombre, tipo_regla, modo_agresividad, meta_destino_id, configuracion, activa)
+            VALUES (?, ?, ?, ?, ?, 1)
+        ''', (nombre, tipo_regla, modo_agresividad, meta_id, config_json))
+        self.conn.commit()
+
+    def obtener_reglas_ahorro_auto(self, solo_activas=True):
+        cursor = self.conn.cursor()
+        if solo_activas:
+            cursor.execute('SELECT * FROM reglas_ahorro_auto WHERE activa=1 ORDER BY nombre')
+        else:
+            cursor.execute('SELECT * FROM reglas_ahorro_auto ORDER BY nombre')
+        return cursor.fetchall()
+
+    def ejecutar_ahorro_redondeo(self, monto_gasto, regla_id, modo='moderado'):
+        """Redondea el gasto y ahorra la diferencia"""
+        # Multiplicadores según agresividad
+        multiplicadores = {
+            'timido': 1,      # Redondeo al peso más cercano
+            'moderado': 10,   # Redondeo a los 10 pesos
+            'agresivo': 50,   # Redondeo a los 50 pesos
+            'bestia': 100     # Redondeo a los 100 pesos
+        }
+
+        mult = multiplicadores.get(modo, 10)
+        redondeo = math.ceil(monto_gasto / mult) * mult
+        diferencia = redondeo - monto_gasto
+
+        if diferencia > 0:
+            self._registrar_ahorro_automatico(regla_id, diferencia)
+
+        return diferencia
+
+    def detectar_payday(self, fecha=None):
+        """Detecta si hoy es día de pago (ingreso significativo)"""
+        if not fecha:
+            fecha = datetime.date.today()
+
+        # Buscar ingresos en los últimos 3 días
+        fecha_str = fecha.strftime('%Y-%m-%d')
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT SUM(monto) FROM gastos
+            WHERE fecha >= date(?, '-3 days') AND fecha <= ?
+            AND monto < 0
+        ''', (fecha_str, fecha_str))
+
+        ingreso = cursor.fetchone()[0]
+        return ingreso and abs(ingreso) > 10000  # Umbral configurable
+
+    def aplicar_ahorro_payday(self, regla_id, modo='moderado'):
+        """Ahorra un porcentaje cuando detecta el sueldo"""
+        porcentajes = {
+            'timido': 0.02,    # 2%
+            'moderado': 0.05,  # 5%
+            'agresivo': 0.10,  # 10%
+            'bestia': 0.15     # 15%
+        }
+
+        if self.detectar_payday():
+            # Obtener último ingreso
+            cursor = self.conn.cursor()
+            cursor.execute('''
+                SELECT monto FROM gastos
+                WHERE monto < 0
+                ORDER BY fecha DESC LIMIT 1
+            ''')
+            ingreso = cursor.fetchone()
+
+            if ingreso:
+                monto_ingreso = abs(ingreso[0])
+                ahorro = monto_ingreso * porcentajes.get(modo, 0.05)
+                self._registrar_ahorro_automatico(regla_id, ahorro)
+                return ahorro
+
+        return 0
+
+    def _registrar_ahorro_automatico(self, regla_id, monto):
+        """Registra el ahorro automático y actualiza la meta si existe"""
+        cursor = self.conn.cursor()
+
+        # Actualizar monto total de la regla
+        cursor.execute('''
+            UPDATE reglas_ahorro_auto
+            SET monto_ahorrado_total = monto_ahorrado_total + ?,
+                ultima_ejecucion = ?
+            WHERE id = ?
+        ''', (monto, datetime.date.today().isoformat(), regla_id))
+
+        # Si hay meta destino, actualizar
+        cursor.execute('SELECT meta_destino_id FROM reglas_ahorro_auto WHERE id=?', (regla_id,))
+        meta_id = cursor.fetchone()[0]
+
+        if meta_id:
+            cursor.execute('''
+                UPDATE metas_ahorro
+                SET monto_actual = monto_actual + ?
+                WHERE id = ?
+            ''', (monto, meta_id))
+
+        self.conn.commit()
+
+    # === SUSCRIPCIONES (Inspirado en Emma) ===
+    def crear_suscripcion(self, nombre, monto, frecuencia, dia_cobro=None, categoria=None, proveedor=None):
+        """Crea una suscripción para tracking"""
+        cursor = self.conn.cursor()
+        fecha_inicio = datetime.date.today().isoformat()
+
+        # Calcular próximo cobro
+        hoy = datetime.date.today()
+        if dia_cobro:
+            if dia_cobro > hoy.day:
+                proximo = hoy.replace(day=dia_cobro)
+            else:
+                # Próximo mes
+                if hoy.month == 12:
+                    proximo = hoy.replace(year=hoy.year+1, month=1, day=dia_cobro)
+                else:
+                    proximo = hoy.replace(month=hoy.month+1, day=dia_cobro)
+        else:
+            proximo = None
+
+        cursor.execute('''
+            INSERT INTO suscripciones (nombre, categoria, monto, frecuencia, dia_cobro,
+                                      fecha_inicio, fecha_proximo_cobro, proveedor, activa)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+        ''', (nombre, categoria, monto, frecuencia, dia_cobro, fecha_inicio,
+              proximo.isoformat() if proximo else None, proveedor))
+        self.conn.commit()
+
+    def obtener_suscripciones(self, solo_activas=True):
+        cursor = self.conn.cursor()
+        if solo_activas:
+            cursor.execute('SELECT * FROM suscripciones WHERE activa=1 ORDER BY nombre')
+        else:
+            cursor.execute('SELECT * FROM suscripciones ORDER BY nombre')
+        return cursor.fetchall()
+
+    def calcular_gasto_suscripciones_mensual(self):
+        """Calcula cuánto se gasta en suscripciones por mes"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT SUM(
+                CASE frecuencia
+                    WHEN 'mensual' THEN monto
+                    WHEN 'anual' THEN monto / 12
+                    WHEN 'semanal' THEN monto * 4.33
+                    ELSE 0
+                END
+            ) FROM suscripciones WHERE activa=1
+        ''')
+        resultado = cursor.fetchone()[0]
+        return resultado if resultado else 0
+
+    def detectar_suscripciones_no_usadas(self):
+        """
+        Detecta suscripciones que podrían no estar usándose
+        (sin gastos recientes en esa categoría/proveedor)
+        """
+        cursor = self.conn.cursor()
+        suscripciones = self.obtener_suscripciones()
+        no_usadas = []
+
+        for susc in suscripciones:
+            id_s, nombre, cat, monto, moneda, freq = susc[:6]
+
+            # Buscar gastos recientes relacionados (últimos 60 días)
+            cursor.execute('''
+                SELECT COUNT(*) FROM gastos
+                WHERE fecha >= date('now', '-60 days')
+                AND (descripcion LIKE ? OR categoria = ?)
+            ''', (f'%{nombre}%', cat))
+
+            count = cursor.fetchone()[0]
+            if count == 0:
+                no_usadas.append((nombre, monto, moneda))
+
+        return no_usadas
+
+    # === FINSCORE (Inspirado en Fintonic) ===
+    def calcular_finscore(self):
+        """
+        Calcula puntuación de salud financiera (0-1000)
+        Basado en:
+        - Ahorro mensual (30%)
+        - Cumplimiento de presupuestos (25%)
+        - Control de deudas (25%)
+        - Consistencia/racha (20%)
+        """
+        cursor = self.conn.cursor()
+        puntuacion = 0
+
+        # 1. Ahorro mensual (0-300 puntos)
+        mes_actual = datetime.date.today().strftime('%Y-%m')
+        cursor.execute('SELECT SUM(monto) FROM gastos WHERE fecha LIKE ? AND monto < 0', (f'{mes_actual}%',))
+        ingresos = abs(cursor.fetchone()[0] or 0)
+
+        cursor.execute('SELECT SUM(monto) FROM gastos WHERE fecha LIKE ? AND monto > 0', (f'{mes_actual}%',))
+        gastos = cursor.fetchone()[0] or 0
+
+        if ingresos > 0:
+            tasa_ahorro = (ingresos - gastos) / ingresos
+            puntos_ahorro = min(300, int(tasa_ahorro * 1000))
+            puntuacion += max(0, puntos_ahorro)
+
+        # 2. Cumplimiento presupuestos (0-250 puntos)
+        cursor.execute('SELECT COUNT(*) FROM presupuestos WHERE mes=?', (mes_actual,))
+        cant_presupuestos = cursor.fetchone()[0]
+
+        if cant_presupuestos > 0:
+            cursor.execute('''
+                SELECT p.categoria, p.limite,
+                       COALESCE(SUM(g.monto), 0) as gastado
+                FROM presupuestos p
+                LEFT JOIN gastos g ON g.categoria = p.categoria
+                    AND g.fecha LIKE ?
+                WHERE p.mes = ?
+                GROUP BY p.categoria, p.limite
+            ''', (f'{mes_actual}%', mes_actual))
+
+            cumplidos = 0
+            for cat, limite, gastado in cursor.fetchall():
+                if gastado <= limite:
+                    cumplidos += 1
+
+            puntos_presupuesto = int((cumplidos / cant_presupuestos) * 250)
+            puntuacion += puntos_presupuesto
+
+        # 3. Control de deudas (0-250 puntos)
+        cursor.execute('SELECT SUM(monto_total - monto_pagado) FROM deudas_compartidas WHERE saldada=0')
+        deudas = cursor.fetchone()[0] or 0
+
+        if ingresos > 0:
+            ratio_deuda = min(1, deudas / ingresos)
+            puntos_deuda = int((1 - ratio_deuda) * 250)
+            puntuacion += puntos_deuda
+        else:
+            puntuacion += 125  # Puntos base si no hay ingresos registrados
+
+        # 4. Racha y consistencia (0-200 puntos)
+        cursor.execute('''
+            SELECT COUNT(DISTINCT DATE(fecha)) FROM gastos
+            WHERE fecha >= date('now', '-30 days')
+        ''')
+        dias_con_registro = cursor.fetchone()[0] or 0
+        puntos_racha = int((dias_con_registro / 30) * 200)
+        puntuacion += puntos_racha
+
+        # Guardar en histórico
+        cursor.execute('''
+            INSERT INTO finscore_historico (fecha, puntuacion, ahorro_mensual, gasto_promedio, deudas_totales, racha_dias)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (datetime.date.today().isoformat(), puntuacion, ingresos - gastos, gastos, deudas, dias_con_registro))
+        self.conn.commit()
+
+        return puntuacion
+
+    def obtener_finscore_actual(self):
+        """Obtiene el FinScore más reciente"""
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT puntuacion FROM finscore_historico ORDER BY fecha DESC LIMIT 1')
+        resultado = cursor.fetchone()
+        return resultado[0] if resultado else None
 
     def cerrar(self):
         self.conn.close()
@@ -3458,13 +3811,69 @@ class GestorGastos:
             justify=tk.LEFT
         ).pack(pady=(0, 15))
 
-        # Campo de texto libre
+        # Campo de texto libre con micrófono
         tk.Label(frame, text="💬 Describe tu gasto:", font=('Segoe UI', 10, 'bold'),
                 bg=COLORES['background']).pack(anchor='w', pady=3)
 
-        entry_texto = tk.Entry(frame, font=('Segoe UI', 12))
-        entry_texto.pack(fill=tk.X, pady=5, ipady=5)
+        # Frame para entry + botón de micrófono
+        frame_input = tk.Frame(frame, bg=COLORES['background'])
+        frame_input.pack(fill=tk.X, pady=5)
+
+        entry_texto = tk.Entry(frame_input, font=('Segoe UI', 12))
+        entry_texto.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=5)
         entry_texto.focus()
+
+        # Botón de micrófono
+        def iniciar_voz():
+            btn_mic.config(text="🎙️ Grabando...", bg=COLORES['danger'])
+            frame.update()
+
+            try:
+                import speech_recognition as sr
+                recognizer = sr.Recognizer()
+
+                with sr.Microphone() as source:
+                    recognizer.adjust_for_ambient_noise(source, duration=0.5)
+                    audio = recognizer.listen(source, timeout=5, phrase_time_limit=10)
+
+                texto = recognizer.recognize_google(audio, language='es-AR')
+                entry_texto.delete(0, tk.END)
+                entry_texto.insert(0, texto)
+                actualizar_preview()
+
+                btn_mic.config(text="🎤", bg=COLORES['info'])
+                messagebox.showinfo("✅ Voz reconocida", f"Detectado: '{texto}'")
+
+            except ImportError:
+                btn_mic.config(text="🎤", bg=COLORES['info'])
+                messagebox.showerror("Error",
+                    "Necesitas instalar:\npip install SpeechRecognition pyaudio")
+            except sr.WaitTimeoutError:
+                btn_mic.config(text="🎤", bg=COLORES['info'])
+                messagebox.showwarning("Timeout", "No se detectó ningún audio")
+            except sr.UnknownValueError:
+                btn_mic.config(text="🎤", bg=COLORES['info'])
+                messagebox.showwarning("No entendido", "No se pudo entender el audio")
+            except sr.RequestError as e:
+                btn_mic.config(text="🎤", bg=COLORES['info'])
+                messagebox.showerror("Error de red", f"Error al conectar con el servicio: {e}")
+            except Exception as e:
+                btn_mic.config(text="🎤", bg=COLORES['info'])
+                messagebox.showerror("Error", f"Error al capturar voz: {e}")
+
+        btn_mic = tk.Button(
+            frame_input,
+            text="🎤",
+            font=('Segoe UI', 14, 'bold'),
+            bg=COLORES['info'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=iniciar_voz,
+            padx=12,
+            pady=5
+        )
+        btn_mic.pack(side=tk.RIGHT, padx=(5, 0))
 
         # Frame de vista previa
         frame_preview = tk.Frame(frame, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
