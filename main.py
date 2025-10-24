@@ -2513,7 +2513,7 @@ class GestorGastos:
 
     def cambiar_vista(self, vista, comando):
         """Cambia la vista actual y actualiza el sidebar"""
-        if vista in ['conversor', 'registro_rapido']:
+        if vista in ['conversor', 'registro_rapido', 'temas', 'reglas_contexto', 'geofence']:
             comando()  # Estas son ventanas modales
             return
 
@@ -4000,9 +4000,35 @@ class GestorGastos:
                     canvas_barra.create_rectangle(0, 0, ancho_prog, 15, fill=COLORES['info'], outline='')
 
     def mostrar_reglas_contexto(self):
-        """Vista de reglas basadas en contexto (hora, clima, calendario)"""
-        frame_btn = tk.Frame(self.frame_contenido, bg=COLORES['background'])
-        frame_btn.pack(fill=tk.X, padx=15, pady=10)
+        """Vista de reglas basadas en contexto (hora, clima, calendario) - Ventana Modal"""
+        v = tk.Toplevel(self.root)
+        v.title("⚙️ Reglas de Contexto")
+        v.geometry("900x700")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+        v.grab_set()
+
+        # Centrar ventana
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (900 // 2)
+        y = (v.winfo_screenheight() // 2) - (700 // 2)
+        v.geometry(f'900x700+{x}+{y}')
+
+        # Frame principal
+        frame_main = tk.Frame(v, bg=COLORES['background'])
+        frame_main.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+        # Header
+        tk.Label(
+            frame_main,
+            text="⚙️ Reglas de Contexto",
+            font=('Segoe UI', 18, 'bold'),
+            bg=COLORES['background'],
+            fg=COLORES['text_primary']
+        ).pack(pady=(0, 10))
+
+        frame_btn = tk.Frame(frame_main, bg=COLORES['background'])
+        frame_btn.pack(fill=tk.X, pady=10)
 
         tk.Button(
             frame_btn,
@@ -4024,7 +4050,8 @@ class GestorGastos:
         def toggle_reglas():
             nuevo_estado = 'false' if estado_actual else 'true'
             self.db.actualizar_config('reglas_contexto_activas', nuevo_estado)
-            self.mostrar_reglas_contexto()  # Recargar vista
+            v.destroy()
+            self.mostrar_reglas_contexto()  # Recargar ventana
 
         tk.Button(
             frame_btn,
@@ -4039,8 +4066,8 @@ class GestorGastos:
             pady=8
         ).pack(side=tk.LEFT, padx=10)
 
-        canvas = tk.Canvas(self.frame_contenido, bg=COLORES['background'], highlightthickness=0)
-        scrollbar = tk.Scrollbar(self.frame_contenido, orient="vertical", command=canvas.yview)
+        canvas = tk.Canvas(frame_main, bg=COLORES['background'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(frame_main, orient="vertical", command=canvas.yview)
 
         frame_lista = tk.Frame(canvas, bg=COLORES['background'])
         frame_lista.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
@@ -4123,11 +4150,12 @@ class GestorGastos:
             frame_botones = tk.Frame(frame_contenido, bg=COLORES['card_bg'])
             frame_botones.pack(anchor='w', pady=5)
 
-            def toggle_regla(regla_id=id_r, actual=activa):
+            def toggle_regla(regla_id=id_r, actual=activa, ventana=v):
                 cursor = self.db.conn.cursor()
                 cursor.execute('UPDATE reglas_contexto SET activa=? WHERE id=?',
                              (0 if actual else 1, regla_id))
                 self.db.conn.commit()
+                ventana.destroy()
                 self.mostrar_reglas_contexto()
 
             tk.Button(
@@ -4143,11 +4171,12 @@ class GestorGastos:
                 pady=4
             ).pack(side=tk.LEFT, padx=3)
 
-            def eliminar_regla(regla_id=id_r):
+            def eliminar_regla(regla_id=id_r, ventana=v):
                 if messagebox.askyesno("Confirmar", "¿Eliminar esta regla de contexto?"):
                     cursor = self.db.conn.cursor()
                     cursor.execute('DELETE FROM reglas_contexto WHERE id=?', (regla_id,))
                     self.db.conn.commit()
+                    ventana.destroy()
                     self.mostrar_reglas_contexto()
 
             tk.Button(
@@ -4162,6 +4191,20 @@ class GestorGastos:
                 padx=10,
                 pady=4
             ).pack(side=tk.LEFT, padx=3)
+
+        # Botón cerrar al final de la ventana
+        tk.Button(
+            frame_main,
+            text="Cerrar",
+            font=('Segoe UI', 10, 'bold'),
+            bg=COLORES['danger'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=v.destroy,
+            padx=30,
+            pady=10
+        ).pack(pady=(15, 0))
 
     def ventana_nueva_regla_contexto(self):
         """Ventana para crear nueva regla de contexto"""
@@ -4276,9 +4319,35 @@ class GestorGastos:
         ).pack(pady=15, fill=tk.X)
 
     def mostrar_geofence(self):
-        """Vista de reglas de geofence (ubicación)"""
-        frame_btn = tk.Frame(self.frame_contenido, bg=COLORES['background'])
-        frame_btn.pack(fill=tk.X, padx=15, pady=10)
+        """Vista de reglas de geofence (ubicación) - Ventana Modal"""
+        v = tk.Toplevel(self.root)
+        v.title("📍 Geofence")
+        v.geometry("900x700")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+        v.grab_set()
+
+        # Centrar ventana
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (900 // 2)
+        y = (v.winfo_screenheight() // 2) - (700 // 2)
+        v.geometry(f'900x700+{x}+{y}')
+
+        # Frame principal
+        frame_main = tk.Frame(v, bg=COLORES['background'])
+        frame_main.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+        # Header
+        tk.Label(
+            frame_main,
+            text="📍 Geofence - Reglas por Ubicación",
+            font=('Segoe UI', 18, 'bold'),
+            bg=COLORES['background'],
+            fg=COLORES['text_primary']
+        ).pack(pady=(0, 10))
+
+        frame_btn = tk.Frame(frame_main, bg=COLORES['background'])
+        frame_btn.pack(fill=tk.X, pady=10)
 
         tk.Button(
             frame_btn,
@@ -4300,6 +4369,7 @@ class GestorGastos:
         def toggle_geofence():
             nuevo_estado = 'false' if estado_actual else 'true'
             self.db.actualizar_config('geofence_activo', nuevo_estado)
+            v.destroy()
             self.mostrar_geofence()
 
         tk.Button(
@@ -4315,8 +4385,8 @@ class GestorGastos:
             pady=8
         ).pack(side=tk.LEFT, padx=10)
 
-        canvas = tk.Canvas(self.frame_contenido, bg=COLORES['background'], highlightthickness=0)
-        scrollbar = tk.Scrollbar(self.frame_contenido, orient="vertical", command=canvas.yview)
+        canvas = tk.Canvas(frame_main, bg=COLORES['background'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(frame_main, orient="vertical", command=canvas.yview)
 
         frame_lista = tk.Frame(canvas, bg=COLORES['background'])
         frame_lista.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
@@ -4391,11 +4461,12 @@ class GestorGastos:
             frame_botones = tk.Frame(frame_contenido, bg=COLORES['card_bg'])
             frame_botones.pack(anchor='w', pady=5)
 
-            def toggle_zona(zona_id=id_z, actual=activa):
+            def toggle_zona(zona_id=id_z, actual=activa, ventana=v):
                 cursor = self.db.conn.cursor()
                 cursor.execute('UPDATE reglas_geofence SET activa=? WHERE id=?',
                              (0 if actual else 1, zona_id))
                 self.db.conn.commit()
+                ventana.destroy()
                 self.mostrar_geofence()
 
             tk.Button(
@@ -4411,11 +4482,12 @@ class GestorGastos:
                 pady=4
             ).pack(side=tk.LEFT, padx=3)
 
-            def eliminar_zona(zona_id=id_z):
+            def eliminar_zona(zona_id=id_z, ventana=v):
                 if messagebox.askyesno("Confirmar", "¿Eliminar esta zona de geofence?"):
                     cursor = self.db.conn.cursor()
                     cursor.execute('DELETE FROM reglas_geofence WHERE id=?', (zona_id,))
                     self.db.conn.commit()
+                    ventana.destroy()
                     self.mostrar_geofence()
 
             tk.Button(
@@ -4430,6 +4502,20 @@ class GestorGastos:
                 padx=10,
                 pady=4
             ).pack(side=tk.LEFT, padx=3)
+
+        # Botón cerrar al final de la ventana
+        tk.Button(
+            frame_main,
+            text="Cerrar",
+            font=('Segoe UI', 10, 'bold'),
+            bg=COLORES['danger'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=v.destroy,
+            padx=30,
+            pady=10
+        ).pack(pady=(15, 0))
 
     def ventana_nueva_geofence(self):
         """Ventana para crear nueva zona de geofence"""
@@ -6686,28 +6772,53 @@ class GestorGastos:
                 ).pack(side=tk.RIGHT, padx=10)
 
     def mostrar_temas(self):
-        """Selector de temas de colores estilo Buddy"""
-        # Header
-        frame_header = tk.Frame(self.frame_contenido, bg=COLORES['primary'], height=80)
-        frame_header.pack(fill=tk.X, padx=15, pady=15)
-        frame_header.pack_propagate(False)
+        """Selector de temas de colores estilo Buddy - Ventana Modal"""
+        v = tk.Toplevel(self.root)
+        v.title("🎨 Temas de Colores")
+        v.geometry("700x600")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+        v.grab_set()
 
+        # Centrar ventana
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (700 // 2)
+        y = (v.winfo_screenheight() // 2) - (600 // 2)
+        v.geometry(f'700x600+{x}+{y}')
+
+        # Frame principal
+        frame_main = tk.Frame(v, bg=COLORES['background'])
+        frame_main.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+        # Header
         tk.Label(
-            frame_header,
+            frame_main,
             text="🎨 Temas de Colores",
             font=('Segoe UI', 18, 'bold'),
-            bg=COLORES['primary'],
-            fg='white'
-        ).pack(padx=20, pady=20)
+            bg=COLORES['background'],
+            fg=COLORES['text_primary']
+        ).pack(pady=(0, 5))
 
         # Descripción
         tk.Label(
-            self.frame_contenido,
+            frame_main,
             text="Personalizá la apariencia de tu app con estos temas de colores",
             font=('Segoe UI', 11),
             bg=COLORES['background'],
             fg='gray'
-        ).pack(pady=10)
+        ).pack(pady=(0, 15))
+
+        # Frame con scroll para temas
+        canvas = tk.Canvas(frame_main, bg=COLORES['background'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(frame_main, orient="vertical", command=canvas.yview)
+        frame_scroll = tk.Frame(canvas, bg=COLORES['background'])
+
+        frame_scroll.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=frame_scroll, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         # Obtener temas
         temas = self.db.obtener_temas_disponibles()
@@ -6715,8 +6826,8 @@ class GestorGastos:
         tema_activo_id = tema_activo[0] if tema_activo else None
 
         # Grid de temas
-        frame_temas = tk.Frame(self.frame_contenido, bg=COLORES['background'])
-        frame_temas.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        frame_temas = tk.Frame(frame_scroll, bg=COLORES['background'])
+        frame_temas.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         for i, tema in enumerate(temas):
             tema_id = tema[0]
@@ -6770,13 +6881,10 @@ class GestorGastos:
                 ).pack(expand=True)
 
             # Botón activar
-            def activar(tid=tema_id, tnombre=nombre):
+            def activar(tid=tema_id, tnombre=nombre, ventana=v):
                 self.db.activar_tema(tid)
                 messagebox.showinfo("Tema Activado", f"✅ Tema '{tnombre}' activado!\n\nReiniciá la app para ver los cambios.")
-                # Limpiar y recargar la vista correctamente
-                for widget in self.frame_contenido.winfo_children():
-                    widget.destroy()
-                self.mostrar_temas()
+                ventana.destroy()
 
             if tema_id != tema_activo_id:
                 tk.Button(
@@ -6804,6 +6912,25 @@ class GestorGastos:
 
         frame_temas.columnconfigure(0, weight=1)
         frame_temas.columnconfigure(1, weight=1)
+
+        # Scroll con rueda del mouse
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        # Botón cerrar
+        tk.Button(
+            frame_main,
+            text="Cerrar",
+            font=('Segoe UI', 10, 'bold'),
+            bg=COLORES['danger'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=v.destroy,
+            padx=30,
+            pady=10
+        ).pack(pady=(15, 0))
 
     def ventana_conversor(self):
         """Ventana de conversor de monedas múltiples"""
