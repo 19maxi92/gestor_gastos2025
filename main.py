@@ -4024,7 +4024,7 @@ class GestorGastos:
             text="⚙️ Reglas de Contexto",
             font=('Segoe UI', 18, 'bold'),
             bg=COLORES['background'],
-            fg=COLORES['text_primary']
+            fg=COLORES['text']
         ).pack(pady=(0, 10))
 
         frame_btn = tk.Frame(frame_main, bg=COLORES['background'])
@@ -4343,7 +4343,7 @@ class GestorGastos:
             text="📍 Geofence - Reglas por Ubicación",
             font=('Segoe UI', 18, 'bold'),
             bg=COLORES['background'],
-            fg=COLORES['text_primary']
+            fg=COLORES['text']
         ).pack(pady=(0, 10))
 
         frame_btn = tk.Frame(frame_main, bg=COLORES['background'])
@@ -6796,7 +6796,7 @@ class GestorGastos:
             text="🎨 Temas de Colores",
             font=('Segoe UI', 18, 'bold'),
             bg=COLORES['background'],
-            fg=COLORES['text_primary']
+            fg=COLORES['text']
         ).pack(pady=(0, 5))
 
         # Descripción
@@ -8150,7 +8150,7 @@ class GestorGastos:
                 text=seccion['descripcion'],
                 font=('Segoe UI', 11),
                 bg=COLORES['card_bg'],
-                fg=COLORES['text_primary'],
+                fg=COLORES['text'],
                 wraplength=800,
                 justify=tk.LEFT,
                 anchor='w'
