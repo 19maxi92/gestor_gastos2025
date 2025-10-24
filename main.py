@@ -2187,8 +2187,14 @@ class GestorGastos:
 
         menu_config = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="⚙️ Configuración", menu=menu_config)
-        menu_config.add_command(label="Sueldo Mensual", command=self.ventana_sueldo)
-        menu_config.add_command(label="Gestionar Categorías", command=self.ventana_categorias)
+        menu_config.add_command(label="💵 Sueldo Mensual", command=self.ventana_sueldo)
+        menu_config.add_command(label="📂 Gestionar Categorías", command=self.ventana_categorias)
+        menu_config.add_separator()
+        menu_config.add_command(label="🎨 Temas", command=self.mostrar_temas)
+        menu_config.add_command(label="💱 Conversor de Monedas", command=self.ventana_conversor)
+        menu_config.add_separator()
+        menu_config.add_command(label="⚙️ Reglas de Contexto", command=self.mostrar_reglas_contexto)
+        menu_config.add_command(label="📍 Geofence", command=self.mostrar_geofence)
 
         menu_ayuda = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="❓ Ayuda", menu=menu_ayuda)
@@ -2257,10 +2263,28 @@ class GestorGastos:
         frame_main = tk.Frame(self.root, bg=COLORES['background'])
         frame_main.pack(fill=tk.BOTH, expand=True)
 
-        # SIDEBAR
-        sidebar = tk.Frame(frame_main, bg=COLORES['sidebar_bg'], width=250)
-        sidebar.pack(side=tk.LEFT, fill=tk.Y)
-        sidebar.pack_propagate(False)
+        # SIDEBAR CON SCROLL
+        sidebar_container = tk.Frame(frame_main, bg=COLORES['sidebar_bg'], width=250)
+        sidebar_container.pack(side=tk.LEFT, fill=tk.Y)
+        sidebar_container.pack_propagate(False)
+
+        # Canvas para scroll
+        canvas_sidebar = tk.Canvas(sidebar_container, bg=COLORES['sidebar_bg'], highlightthickness=0, width=250)
+        scrollbar_sidebar = tk.Scrollbar(sidebar_container, orient="vertical", command=canvas_sidebar.yview, bg=COLORES['sidebar_bg'])
+
+        sidebar = tk.Frame(canvas_sidebar, bg=COLORES['sidebar_bg'])
+        sidebar.bind("<Configure>", lambda e: canvas_sidebar.configure(scrollregion=canvas_sidebar.bbox("all")))
+
+        canvas_sidebar.create_window((0, 0), window=sidebar, anchor="nw", width=235)
+        canvas_sidebar.configure(yscrollcommand=scrollbar_sidebar.set)
+
+        canvas_sidebar.pack(side="left", fill="both", expand=True)
+        scrollbar_sidebar.pack(side="right", fill="y")
+
+        # Soporte para scroll con rueda del mouse
+        def _on_mousewheel(event):
+            canvas_sidebar.yview_scroll(int(-1*(event.delta/120)), "units")
+        canvas_sidebar.bind_all("<MouseWheel>", _on_mousewheel)
 
         # Botón de agregar gasto destacado (Estilo Monefy)
         tk.Button(
@@ -2288,47 +2312,146 @@ class GestorGastos:
             pady=8
         ).pack(fill=tk.X, padx=15, pady=(0, 20))
 
-        # Botones de navegación
-        nav_buttons = [
+        # Separador
+        tk.Frame(sidebar, bg=COLORES['border'], height=1).pack(fill=tk.X, padx=10, pady=5)
+
+        # BOTONES PRINCIPALES (navegación esencial)
+        nav_buttons_principales = [
             ("📊 Dashboard", 'dashboard', self.mostrar_dashboard),
-            ("⚡ Registro Rápido", 'registro_rapido', self.ventana_registro_rapido),
             ("📋 Gastos", 'gastos', self.mostrar_gastos),
+            ("📊 Presupuestos", 'presupuestos', self.mostrar_presupuestos),
+            ("🎯 Metas", 'metas', self.mostrar_metas),
+            ("💳 Tarjetas", 'tarjetas', self.mostrar_tarjetas),
+            ("🏆 FinScore", 'finscore', self.mostrar_finscore),
+        ]
+
+        tk.Label(sidebar, text="PRINCIPAL", font=('Segoe UI', 8, 'bold'),
+                bg=COLORES['sidebar_bg'], fg=COLORES['text_light'], anchor='w', padx=20).pack(fill=tk.X, pady=(5,2))
+
+        # SECCIÓN: Gestión (funciones de gestión)
+        nav_buttons_gestion = [
             ("🔔 Alertas", 'alertas', self.mostrar_alertas),
             ("📅 Cuentas por Pagar", 'cuentas_pagar', self.mostrar_cuentas_por_pagar),
-            ("👥 Deudas Compartidas", 'deudas', self.mostrar_deudas),
-            ("🎯 Metas de Ahorro", 'metas', self.mostrar_metas),
-            ("💰 Ahorro Automático", 'ahorro_auto', self.mostrar_ahorro_automatico),
             ("📺 Suscripciones", 'suscripciones', self.mostrar_suscripciones),
-            ("💳 Tarjetas", 'tarjetas', self.mostrar_tarjetas),
             ("🔄 Recurrentes", 'recurrentes', self.mostrar_recurrentes),
-            ("📊 Presupuestos", 'presupuestos', self.mostrar_presupuestos),
-            ("⚙️ Reglas de Contexto", 'reglas_contexto', self.mostrar_reglas_contexto),
-            ("📍 Geofence", 'geofence', self.mostrar_geofence),
-            ("🏆 FinScore", 'finscore', self.mostrar_finscore),
-            ("👥 Splitwise", 'splitwise', self.mostrar_splitwise),
-            ("🤝 Buddy Presupuestos", 'buddy_presupuestos', self.mostrar_buddy_presupuestos),
-            ("🔔 Notificaciones Buddy", 'buddy_notificaciones', self.mostrar_buddy_notificaciones),
-            ("🎨 Temas", 'temas', self.mostrar_temas),
+            ("💰 Ahorro Auto", 'ahorro_auto', self.mostrar_ahorro_automatico),
+        ]
+
+        # SECCIÓN: Social (funciones colaborativas)
+        nav_buttons_social = [
+            ("👥 Gastos Compartidos", 'deudas', self.mostrar_deudas),
+            ("💸 Splitwise", 'splitwise', self.mostrar_splitwise),
+            ("🤝 Presup. Compartidos", 'buddy_presupuestos', self.mostrar_buddy_presupuestos),
+            ("🔔 Notif. Buddy", 'buddy_notificaciones', self.mostrar_buddy_notificaciones),
+        ]
+
+        # SECCIÓN: Gamificación
+        nav_buttons_gamificacion = [
             ("🎮 Logros", 'logros', self.mostrar_logros),
-            ("💱 Conversor", 'conversor', self.ventana_conversor),
         ]
 
         self.nav_buttons = {}
-        for text, vista, comando in nav_buttons:
+
+        # Renderizar botones principales
+        for text, vista, comando in nav_buttons_principales:
             btn = tk.Button(
                 sidebar,
                 text=text,
-                font=('Segoe UI', 11, 'bold'),
+                font=('Segoe UI', 10, 'bold'),
                 bg=COLORES['sidebar_bg'],
                 fg='white',
                 relief=tk.FLAT,
                 cursor='hand2',
                 anchor='w',
                 padx=20,
-                pady=12,
+                pady=10,
                 command=lambda v=vista, c=comando: self.cambiar_vista(v, c)
             )
-            btn.pack(fill=tk.X, padx=5, pady=2)
+            btn.pack(fill=tk.X, padx=5, pady=1)
+            btn.bind('<Enter>', lambda e, b=btn: b.config(bg=COLORES['sidebar_hover']))
+            btn.bind('<Leave>', lambda e, b=btn, v=vista: b.config(
+                bg=COLORES['primary'] if self.vista_actual == v else COLORES['sidebar_bg']
+            ))
+            self.nav_buttons[vista] = btn
+
+        # Separador
+        tk.Frame(sidebar, bg=COLORES['border'], height=1).pack(fill=tk.X, padx=10, pady=8)
+
+        # Label Gestión
+        tk.Label(sidebar, text="GESTIÓN", font=('Segoe UI', 8, 'bold'),
+                bg=COLORES['sidebar_bg'], fg=COLORES['text_light'], anchor='w', padx=20).pack(fill=tk.X, pady=(5,2))
+
+        for text, vista, comando in nav_buttons_gestion:
+            btn = tk.Button(
+                sidebar,
+                text=text,
+                font=('Segoe UI', 10),
+                bg=COLORES['sidebar_bg'],
+                fg='white',
+                relief=tk.FLAT,
+                cursor='hand2',
+                anchor='w',
+                padx=20,
+                pady=10,
+                command=lambda v=vista, c=comando: self.cambiar_vista(v, c)
+            )
+            btn.pack(fill=tk.X, padx=5, pady=1)
+            btn.bind('<Enter>', lambda e, b=btn: b.config(bg=COLORES['sidebar_hover']))
+            btn.bind('<Leave>', lambda e, b=btn, v=vista: b.config(
+                bg=COLORES['primary'] if self.vista_actual == v else COLORES['sidebar_bg']
+            ))
+            self.nav_buttons[vista] = btn
+
+        # Separador
+        tk.Frame(sidebar, bg=COLORES['border'], height=1).pack(fill=tk.X, padx=10, pady=8)
+
+        # Label Social
+        tk.Label(sidebar, text="SOCIAL", font=('Segoe UI', 8, 'bold'),
+                bg=COLORES['sidebar_bg'], fg=COLORES['text_light'], anchor='w', padx=20).pack(fill=tk.X, pady=(5,2))
+
+        for text, vista, comando in nav_buttons_social:
+            btn = tk.Button(
+                sidebar,
+                text=text,
+                font=('Segoe UI', 10),
+                bg=COLORES['sidebar_bg'],
+                fg='white',
+                relief=tk.FLAT,
+                cursor='hand2',
+                anchor='w',
+                padx=20,
+                pady=10,
+                command=lambda v=vista, c=comando: self.cambiar_vista(v, c)
+            )
+            btn.pack(fill=tk.X, padx=5, pady=1)
+            btn.bind('<Enter>', lambda e, b=btn: b.config(bg=COLORES['sidebar_hover']))
+            btn.bind('<Leave>', lambda e, b=btn, v=vista: b.config(
+                bg=COLORES['primary'] if self.vista_actual == v else COLORES['sidebar_bg']
+            ))
+            self.nav_buttons[vista] = btn
+
+        # Separador
+        tk.Frame(sidebar, bg=COLORES['border'], height=1).pack(fill=tk.X, padx=10, pady=8)
+
+        # Label Gamificación
+        tk.Label(sidebar, text="GAMIFICACIÓN", font=('Segoe UI', 8, 'bold'),
+                bg=COLORES['sidebar_bg'], fg=COLORES['text_light'], anchor='w', padx=20).pack(fill=tk.X, pady=(5,2))
+
+        for text, vista, comando in nav_buttons_gamificacion:
+            btn = tk.Button(
+                sidebar,
+                text=text,
+                font=('Segoe UI', 10),
+                bg=COLORES['sidebar_bg'],
+                fg='white',
+                relief=tk.FLAT,
+                cursor='hand2',
+                anchor='w',
+                padx=20,
+                pady=10,
+                command=lambda v=vista, c=comando: self.cambiar_vista(v, c)
+            )
+            btn.pack(fill=tk.X, padx=5, pady=1)
             btn.bind('<Enter>', lambda e, b=btn: b.config(bg=COLORES['sidebar_hover']))
             btn.bind('<Leave>', lambda e, b=btn, v=vista: b.config(
                 bg=COLORES['primary'] if self.vista_actual == v else COLORES['sidebar_bg']
@@ -2336,7 +2459,7 @@ class GestorGastos:
             self.nav_buttons[vista] = btn
 
         # Espacio
-        tk.Frame(sidebar, bg=COLORES['sidebar_bg']).pack(expand=True)
+        tk.Frame(sidebar, bg=COLORES['sidebar_bg'], height=30).pack()
 
         # Info al pie del sidebar
         tk.Label(
@@ -2679,12 +2802,20 @@ class GestorGastos:
     def cargar_gastos(self):
         for item in self.tree.get_children():
             self.tree.delete(item)
-        
+
         mes = self.combo_mes.get()
         gastos = self.db.obtener_gastos(mes)
-        
+
+        # Obtener mapa de categorías a iconos
+        cat_icons = {}
+        categorias = self.db.obtener_categorias()
+        for cat in categorias:
+            cat_icons[cat[1]] = cat[3] if len(cat) > 3 else '❓'  # nombre -> icono
+
         for g in gastos:
-            self.tree.insert('', tk.END, values=(g[1], g[2], f"{g[3]:,.2f}", g[4], g[5] or '', g[6]), tags=(g[0],))
+            icono = cat_icons.get(g[2], '❓')
+            categoria_con_icono = f"{icono} {g[2]}"
+            self.tree.insert('', tk.END, values=(g[1], categoria_con_icono, f"{g[3]:,.2f}", g[4], g[5] or '', g[6]), tags=(g[0],))
 
     def menu_contextual_gasto(self, event):
         item = self.tree.identify_row(event.y)
