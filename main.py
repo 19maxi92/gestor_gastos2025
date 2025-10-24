@@ -1616,18 +1616,31 @@ class GestorGastos:
         sidebar.pack(side=tk.LEFT, fill=tk.Y)
         sidebar.pack_propagate(False)
 
-        # Botón de agregar gasto destacado
+        # Botón de agregar gasto destacado (Estilo Monefy)
         tk.Button(
             sidebar,
-            text="➕ AGREGAR GASTO",
+            text="⚡ ENTRADA RÁPIDA",
             font=('Segoe UI', 12, 'bold'),
             bg=COLORES['success'],
             fg='white',
             relief=tk.FLAT,
             cursor='hand2',
-            command=self.ventana_agregar_gasto,
+            command=self.ventana_entrada_rapida_monefy,
             pady=15
-        ).pack(fill=tk.X, padx=15, pady=(20, 30))
+        ).pack(fill=tk.X, padx=15, pady=(10, 10))
+
+        # Botón secundario para entrada completa
+        tk.Button(
+            sidebar,
+            text="➕ Entrada Completa",
+            font=('Segoe UI', 9),
+            bg=COLORES['primary_dark'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=self.ventana_agregar_gasto,
+            pady=8
+        ).pack(fill=tk.X, padx=15, pady=(0, 20))
 
         # Botones de navegación
         nav_buttons = [
@@ -4701,6 +4714,225 @@ class GestorGastos:
         tk.Button(frame_btns, text="❌ Cancelar", command=v.destroy, bg=COLORES['danger'],
                  fg='white', font=('Segoe UI', 10), relief=tk.FLAT, cursor='hand2',
                  padx=30, pady=10).pack(side=tk.LEFT, padx=5)
+
+    def ventana_entrada_rapida_monefy(self):
+        """Entrada ultra-rápida estilo Monefy con calculadora"""
+        v = tk.Toplevel(self.root)
+        v.title("⚡ Entrada Rápida Monefy")
+        v.geometry("400x650")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+        v.grab_set()
+
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (400 // 2)
+        y = (v.winfo_screenheight() // 2) - (650 // 2)
+        v.geometry(f'400x650+{x}+{y}')
+
+        # Variables
+        monto_actual = tk.StringVar(value="0")
+        categoria_seleccionada = tk.StringVar()
+        es_gasto = tk.BooleanVar(value=True)  # True=Gasto, False=Ingreso
+
+        # Header con toggle Gasto/Ingreso
+        frame_toggle = tk.Frame(v, bg=COLORES['background'])
+        frame_toggle.pack(fill=tk.X, padx=20, pady=10)
+
+        def toggle_tipo():
+            if es_gasto.get():
+                btn_gasto.config(bg=COLORES['danger'], relief=tk.SUNKEN)
+                btn_ingreso.config(bg=COLORES['text_secondary'], relief=tk.FLAT)
+            else:
+                btn_gasto.config(bg=COLORES['text_secondary'], relief=tk.FLAT)
+                btn_ingreso.config(bg=COLORES['success'], relief=tk.SUNKEN)
+
+        btn_gasto = tk.Button(
+            frame_toggle,
+            text="📤 GASTO",
+            font=('Segoe UI', 11, 'bold'),
+            bg=COLORES['danger'],
+            fg='white',
+            relief=tk.SUNKEN,
+            cursor='hand2',
+            command=lambda: [es_gasto.set(True), toggle_tipo()],
+            padx=20,
+            pady=10
+        )
+        btn_gasto.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
+
+        btn_ingreso = tk.Button(
+            frame_toggle,
+            text="📥 INGRESO",
+            font=('Segoe UI', 11, 'bold'),
+            bg=COLORES['text_secondary'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=lambda: [es_gasto.set(False), toggle_tipo()],
+            padx=20,
+            pady=10
+        )
+        btn_ingreso.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
+
+        # Display del monto (estilo calculadora)
+        frame_display = tk.Frame(v, bg=COLORES['primary'], height=80)
+        frame_display.pack(fill=tk.X, padx=20, pady=10)
+        frame_display.pack_propagate(False)
+
+        tk.Label(
+            frame_display,
+            textvariable=monto_actual,
+            font=('Segoe UI', 36, 'bold'),
+            bg=COLORES['primary'],
+            fg='white',
+            anchor='e'
+        ).pack(expand=True, fill=tk.BOTH, padx=15)
+
+        # Calculadora
+        frame_calc = tk.Frame(v, bg=COLORES['background'])
+        frame_calc.pack(padx=20, pady=5)
+
+        def agregar_digito(digito):
+            actual = monto_actual.get()
+            if actual == "0":
+                monto_actual.set(digito)
+            else:
+                monto_actual.set(actual + digito)
+
+        def borrar():
+            actual = monto_actual.get()
+            if len(actual) > 1:
+                monto_actual.set(actual[:-1])
+            else:
+                monto_actual.set("0")
+
+        def limpiar():
+            monto_actual.set("0")
+
+        # Botones de la calculadora
+        botones = [
+            ['7', '8', '9'],
+            ['4', '5', '6'],
+            ['1', '2', '3'],
+            ['C', '0', '⌫']
+        ]
+
+        for fila in botones:
+            frame_fila = tk.Frame(frame_calc, bg=COLORES['background'])
+            frame_fila.pack()
+            for btn_text in fila:
+                if btn_text == 'C':
+                    cmd = limpiar
+                    bg = COLORES['warning']
+                elif btn_text == '⌫':
+                    cmd = borrar
+                    bg = COLORES['danger']
+                else:
+                    cmd = lambda d=btn_text: agregar_digito(d)
+                    bg = COLORES['card_bg']
+
+                tk.Button(
+                    frame_fila,
+                    text=btn_text,
+                    font=('Segoe UI', 16, 'bold'),
+                    bg=bg,
+                    fg='white' if btn_text in ['C', '⌫'] else COLORES['text'],
+                    relief=tk.RAISED,
+                    cursor='hand2',
+                    command=cmd,
+                    width=4,
+                    height=2
+                ).pack(side=tk.LEFT, padx=3, pady=3)
+
+        # Selector de categorías (iconos grandes)
+        tk.Label(
+            v,
+            text="Seleccioná Categoría:",
+            font=('Segoe UI', 11, 'bold'),
+            bg=COLORES['background']
+        ).pack(pady=(15, 5))
+
+        frame_categorias = tk.Frame(v, bg=COLORES['background'])
+        frame_categorias.pack(padx=20)
+
+        categorias = self.db.obtener_categorias()[:8]  # Primeras 8 categorías
+
+        cat_buttons = {}
+        for i, cat in enumerate(categorias):
+            id_cat, nombre_cat, icono = cat[:3]
+
+            def seleccionar_cat(nombre=nombre_cat, icono_cat=icono):
+                categoria_seleccionada.set(nombre)
+                # Actualizar visual
+                for btn in cat_buttons.values():
+                    btn.config(relief=tk.FLAT, bg=COLORES['card_bg'])
+                cat_buttons[nombre].config(relief=tk.SUNKEN, bg=COLORES['primary'])
+
+            btn = tk.Button(
+                frame_categorias,
+                text=f"{icono}\n{nombre_cat[:8]}",
+                font=('Segoe UI', 9),
+                bg=COLORES['card_bg'],
+                fg=COLORES['text'],
+                relief=tk.FLAT,
+                cursor='hand2',
+                command=seleccionar_cat,
+                width=10,
+                height=3
+            )
+            btn.grid(row=i//4, column=i%4, padx=3, pady=3)
+            cat_buttons[nombre_cat] = btn
+
+        # Seleccionar primera categoría por defecto
+        if categorias:
+            categoria_seleccionada.set(categorias[0][1])
+            cat_buttons[categorias[0][1]].config(relief=tk.SUNKEN, bg=COLORES['primary'])
+
+        # Botón de guardar grande
+        def guardar_rapido():
+            try:
+                monto = float(monto_actual.get())
+                if monto <= 0:
+                    messagebox.showwarning("Error", "Ingresá un monto válido")
+                    return
+
+                cat = categoria_seleccionada.get()
+                if not cat:
+                    messagebox.showwarning("Error", "Seleccioná una categoría")
+                    return
+
+                fecha = datetime.date.today().isoformat()
+
+                if es_gasto.get():
+                    # Es un gasto
+                    self.db.agregar_gasto(fecha, cat, monto, 'ARS', '', 'Efectivo', '')
+                else:
+                    # Es un ingreso (monto negativo)
+                    self.db.agregar_gasto(fecha, cat, -monto, 'ARS', 'Ingreso', 'Efectivo', '')
+
+                messagebox.showinfo("✅ Listo", f"{'Gasto' if es_gasto.get() else 'Ingreso'} guardado: ${monto:,.0f}")
+                v.destroy()
+
+                if self.vista_actual == 'gastos' or self.vista_actual == 'dashboard':
+                    if self.vista_actual == 'gastos':
+                        self.cargar_gastos()
+                    else:
+                        self.mostrar_dashboard()
+
+            except ValueError:
+                messagebox.showerror("Error", "Monto inválido")
+
+        tk.Button(
+            v,
+            text="💾 GUARDAR",
+            font=('Segoe UI', 14, 'bold'),
+            bg=COLORES['success'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=guardar_rapido,
+            pady=15
+        ).pack(fill=tk.X, padx=20, pady=15)
 
     def ventana_agregar_gasto(self):
         v = tk.Toplevel(self.root)
