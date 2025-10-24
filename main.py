@@ -433,6 +433,71 @@ class Database:
             )
         ''')
 
+        # Tablas para Splitwise
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS grupos_splitwise (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                descripcion TEXT,
+                tipo TEXT DEFAULT 'general',
+                fecha_creacion TEXT NOT NULL,
+                activo INTEGER DEFAULT 1,
+                icono TEXT DEFAULT '👥'
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS participantes_splitwise (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                grupo_id INTEGER NOT NULL,
+                nombre TEXT NOT NULL,
+                email TEXT,
+                FOREIGN KEY (grupo_id) REFERENCES grupos_splitwise(id)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS gastos_splitwise (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                grupo_id INTEGER NOT NULL,
+                descripcion TEXT NOT NULL,
+                monto_total REAL NOT NULL,
+                moneda TEXT DEFAULT 'ARS',
+                pagado_por TEXT NOT NULL,
+                fecha TEXT NOT NULL,
+                categoria TEXT,
+                metodo_division TEXT DEFAULT 'equitativa',
+                notas TEXT,
+                FOREIGN KEY (grupo_id) REFERENCES grupos_splitwise(id)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS divisiones_splitwise (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                gasto_id INTEGER NOT NULL,
+                participante TEXT NOT NULL,
+                monto_debe REAL NOT NULL,
+                pagado INTEGER DEFAULT 0,
+                fecha_pago TEXT,
+                FOREIGN KEY (gasto_id) REFERENCES gastos_splitwise(id)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS pagos_splitwise (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                grupo_id INTEGER NOT NULL,
+                de_quien TEXT NOT NULL,
+                para_quien TEXT NOT NULL,
+                monto REAL NOT NULL,
+                moneda TEXT DEFAULT 'ARS',
+                fecha TEXT NOT NULL,
+                notas TEXT,
+                FOREIGN KEY (grupo_id) REFERENCES grupos_splitwise(id)
+            )
+        ''')
+
         self.conn.commit()
 
     def inicializar_datos(self):
@@ -1249,6 +1314,192 @@ class Database:
         resultado = cursor.fetchone()
         return resultado[0] if resultado else None
 
+    # === SPLITWISE ===
+    def crear_grupo_splitwise(self, nombre, descripcion='', tipo='general', icono='👥'):
+        """Crea un nuevo grupo para gastos compartidos"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT INTO grupos_splitwise (nombre, descripcion, tipo, fecha_creacion, icono)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (nombre, descripcion, tipo, datetime.date.today().isoformat(), icono))
+        self.conn.commit()
+        return cursor.lastrowid
+
+    def obtener_grupos_splitwise(self, activos_solo=True):
+        """Obtiene todos los grupos de Splitwise"""
+        cursor = self.conn.cursor()
+        if activos_solo:
+            cursor.execute('SELECT * FROM grupos_splitwise WHERE activo = 1 ORDER BY fecha_creacion DESC')
+        else:
+            cursor.execute('SELECT * FROM grupos_splitwise ORDER BY fecha_creacion DESC')
+        return cursor.fetchall()
+
+    def agregar_participante_splitwise(self, grupo_id, nombre, email=''):
+        """Agrega un participante a un grupo"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT INTO participantes_splitwise (grupo_id, nombre, email)
+            VALUES (?, ?, ?)
+        ''', (grupo_id, nombre, email))
+        self.conn.commit()
+
+    def obtener_participantes_grupo(self, grupo_id):
+        """Obtiene todos los participantes de un grupo"""
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT * FROM participantes_splitwise WHERE grupo_id = ?', (grupo_id,))
+        return cursor.fetchall()
+
+    def agregar_gasto_splitwise(self, grupo_id, descripcion, monto_total, pagado_por,
+                                metodo_division='equitativa', divisiones=None, categoria='', notas=''):
+        """
+        Agrega un gasto compartido y sus divisiones
+        divisiones: dict {participante: monto_debe} o None para división equitativa
+        """
+        cursor = self.conn.cursor()
+
+        # Insertar gasto
+        cursor.execute('''
+            INSERT INTO gastos_splitwise (grupo_id, descripcion, monto_total, pagado_por,
+                                         fecha, categoria, metodo_division, notas)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (grupo_id, descripcion, monto_total, pagado_por,
+              datetime.date.today().isoformat(), categoria, metodo_division, notas))
+
+        gasto_id = cursor.lastrowid
+
+        # Insertar divisiones
+        if divisiones is None:
+            # División equitativa entre todos los participantes
+            participantes = self.obtener_participantes_grupo(grupo_id)
+            if participantes:
+                monto_por_persona = monto_total / len(participantes)
+                divisiones = {p[2]: monto_por_persona for p in participantes}  # p[2] es el nombre
+
+        for participante, monto_debe in divisiones.items():
+            cursor.execute('''
+                INSERT INTO divisiones_splitwise (gasto_id, participante, monto_debe)
+                VALUES (?, ?, ?)
+            ''', (gasto_id, participante, monto_debe))
+
+        self.conn.commit()
+        return gasto_id
+
+    def obtener_gastos_grupo(self, grupo_id):
+        """Obtiene todos los gastos de un grupo"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT * FROM gastos_splitwise
+            WHERE grupo_id = ?
+            ORDER BY fecha DESC
+        ''', (grupo_id,))
+        return cursor.fetchall()
+
+    def calcular_balances_grupo(self, grupo_id):
+        """
+        Calcula el balance de cada participante en un grupo
+        Retorna: dict {participante: balance} (positivo = le deben, negativo = debe)
+        """
+        cursor = self.conn.cursor()
+        participantes = self.obtener_participantes_grupo(grupo_id)
+        balances = {p[2]: 0.0 for p in participantes}  # p[2] es el nombre
+
+        # Obtener todos los gastos del grupo
+        gastos = self.obtener_gastos_grupo(grupo_id)
+
+        for gasto in gastos:
+            gasto_id = gasto[0]
+            pagado_por = gasto[4]  # índice del campo pagado_por
+
+            # Obtener divisiones de este gasto
+            cursor.execute('''
+                SELECT participante, monto_debe, pagado
+                FROM divisiones_splitwise
+                WHERE gasto_id = ?
+            ''', (gasto_id,))
+            divisiones = cursor.fetchall()
+
+            for div in divisiones:
+                participante = div[0]
+                monto_debe = div[1]
+                pagado = div[2]
+
+                if not pagado:  # Si no ha pagado su parte
+                    if participante == pagado_por:
+                        # Si el que pagó es el mismo, no se debe a sí mismo
+                        # pero sí le deben los demás
+                        pass
+                    else:
+                        # Este participante debe dinero
+                        balances[participante] -= monto_debe
+                        # El que pagó tiene saldo a favor
+                        balances[pagado_por] += monto_debe
+
+        # Restar los pagos realizados
+        cursor.execute('''
+            SELECT pagador, receptor, monto
+            FROM pagos_splitwise
+            WHERE grupo_id = ?
+        ''', (grupo_id,))
+        pagos = cursor.fetchall()
+
+        for pago in pagos:
+            pagador = pago[0]
+            receptor = pago[1]
+            monto = pago[2]
+
+            balances[pagador] += monto  # El que pagó reduce su deuda
+            balances[receptor] -= monto  # El que recibió reduce lo que le deben
+
+        return balances
+
+    def simplificar_deudas_grupo(self, grupo_id):
+        """
+        Simplifica las deudas del grupo usando algoritmo greedy
+        Retorna: lista de tuplas (deudor, acreedor, monto)
+        """
+        balances = self.calcular_balances_grupo(grupo_id)
+
+        # Separar deudores y acreedores
+        deudores = [(nombre, -balance) for nombre, balance in balances.items() if balance < -0.01]
+        acreedores = [(nombre, balance) for nombre, balance in balances.items() if balance > 0.01]
+
+        # Ordenar de mayor a menor
+        deudores.sort(key=lambda x: x[1], reverse=True)
+        acreedores.sort(key=lambda x: x[1], reverse=True)
+
+        transacciones = []
+        i, j = 0, 0
+
+        while i < len(deudores) and j < len(acreedores):
+            deudor, deuda = deudores[i]
+            acreedor, credito = acreedores[j]
+
+            monto_pago = min(deuda, credito)
+
+            if monto_pago > 0.01:  # Ignorar centavos
+                transacciones.append((deudor, acreedor, round(monto_pago, 2)))
+
+            # Actualizar balances
+            deudores[i] = (deudor, deuda - monto_pago)
+            acreedores[j] = (acreedor, credito - monto_pago)
+
+            # Avanzar si se saldó
+            if deudores[i][1] < 0.01:
+                i += 1
+            if acreedores[j][1] < 0.01:
+                j += 1
+
+        return transacciones
+
+    def registrar_pago_splitwise(self, grupo_id, pagador, receptor, monto, notas=''):
+        """Registra un pago entre participantes"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT INTO pagos_splitwise (grupo_id, pagador, receptor, monto, fecha, notas)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (grupo_id, pagador, receptor, monto, datetime.date.today().isoformat(), notas))
+        self.conn.commit()
+
     def cerrar(self):
         self.conn.close()
 
@@ -1659,6 +1910,7 @@ class GestorGastos:
             ("⚙️ Reglas de Contexto", 'reglas_contexto', self.mostrar_reglas_contexto),
             ("📍 Geofence", 'geofence', self.mostrar_geofence),
             ("🏆 FinScore", 'finscore', self.mostrar_finscore),
+            ("👥 Splitwise", 'splitwise', self.mostrar_splitwise),
             ("🎮 Logros", 'logros', self.mostrar_logros),
             ("💱 Conversor", 'conversor', self.ventana_conversor),
         ]
@@ -4439,6 +4691,818 @@ class GestorGastos:
             bg=COLORES['light'],
             pady=5
         ).pack()
+
+    def mostrar_splitwise(self):
+        """Gestión de gastos compartidos estilo Splitwise"""
+        # Header
+        frame_header = tk.Frame(self.frame_contenido, bg=COLORES['primary'], height=80)
+        frame_header.pack(fill=tk.X, padx=15, pady=15)
+        frame_header.pack_propagate(False)
+
+        tk.Label(
+            frame_header,
+            text="👥 Splitwise - Gastos Compartidos",
+            font=('Segoe UI', 18, 'bold'),
+            bg=COLORES['primary'],
+            fg='white'
+        ).pack(side=tk.LEFT, padx=20, pady=20)
+
+        tk.Button(
+            frame_header,
+            text="➕ Nuevo Grupo",
+            font=('Segoe UI', 11, 'bold'),
+            bg=COLORES['success'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=self.ventana_nuevo_grupo_splitwise,
+            padx=20,
+            pady=8
+        ).pack(side=tk.RIGHT, padx=20)
+
+        # Lista de grupos
+        grupos = self.db.obtener_grupos_splitwise()
+
+        if not grupos:
+            tk.Label(
+                self.frame_contenido,
+                text="👥 No tenés grupos creados\n\nCreá un grupo para dividir gastos con amigos, familia o compañeros",
+                font=('Segoe UI', 12),
+                bg=COLORES['background'],
+                fg='gray',
+                justify=tk.CENTER
+            ).pack(expand=True)
+            return
+
+        # Mostrar grupos
+        frame_scroll = tk.Frame(self.frame_contenido, bg=COLORES['background'])
+        frame_scroll.pack(fill=tk.BOTH, expand=True, padx=15, pady=10)
+
+        canvas = tk.Canvas(frame_scroll, bg=COLORES['background'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(frame_scroll, orient="vertical", command=canvas.yview)
+        frame_grupos = tk.Frame(canvas, bg=COLORES['background'])
+
+        frame_grupos.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=frame_grupos, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        for grupo in grupos:
+            grupo_id = grupo[0]
+            nombre = grupo[1]
+            descripcion = grupo[2]
+            icono = grupo[6] if len(grupo) > 6 else '👥'
+
+            # Calcular balances del grupo
+            balances = self.db.calcular_balances_grupo(grupo_id)
+            participantes = self.db.obtener_participantes_grupo(grupo_id)
+
+            # Tarjeta del grupo
+            frame_grupo = tk.Frame(frame_grupos, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+            frame_grupo.pack(fill=tk.X, pady=8)
+
+            # Header del grupo
+            frame_grupo_header = tk.Frame(frame_grupo, bg=COLORES['secondary'])
+            frame_grupo_header.pack(fill=tk.X)
+
+            tk.Label(
+                frame_grupo_header,
+                text=f"{icono} {nombre}",
+                font=('Segoe UI', 14, 'bold'),
+                bg=COLORES['secondary'],
+                fg='white'
+            ).pack(side=tk.LEFT, padx=15, pady=10)
+
+            tk.Label(
+                frame_grupo_header,
+                text=f"{len(participantes)} personas",
+                font=('Segoe UI', 9),
+                bg=COLORES['secondary'],
+                fg='white'
+            ).pack(side=tk.RIGHT, padx=15)
+
+            # Descripción
+            if descripcion:
+                tk.Label(
+                    frame_grupo,
+                    text=descripcion,
+                    font=('Segoe UI', 9),
+                    bg=COLORES['card_bg'],
+                    fg='gray'
+                ).pack(padx=15, pady=5, anchor='w')
+
+            # Mostrar balances
+            frame_balances = tk.Frame(frame_grupo, bg=COLORES['card_bg'])
+            frame_balances.pack(fill=tk.X, padx=15, pady=5)
+
+            if balances:
+                for participante, balance in balances.items():
+                    if abs(balance) > 0.01:  # Ignorar balances muy pequeños
+                        if balance > 0:
+                            texto = f"💚 {participante}: le deben ${balance:,.2f}"
+                            color = COLORES['success']
+                        else:
+                            texto = f"❤️ {participante}: debe ${-balance:,.2f}"
+                            color = COLORES['danger']
+
+                        tk.Label(
+                            frame_balances,
+                            text=texto,
+                            font=('Segoe UI', 10, 'bold'),
+                            bg=COLORES['card_bg'],
+                            fg=color
+                        ).pack(anchor='w', pady=2)
+
+            # Botones de acción
+            frame_btns = tk.Frame(frame_grupo, bg=COLORES['card_bg'])
+            frame_btns.pack(fill=tk.X, padx=15, pady=10)
+
+            tk.Button(
+                frame_btns,
+                text="➕ Agregar Gasto",
+                font=('Segoe UI', 9, 'bold'),
+                bg=COLORES['info'],
+                fg='white',
+                relief=tk.FLAT,
+                cursor='hand2',
+                command=lambda gid=grupo_id: self.ventana_agregar_gasto_splitwise(gid),
+                padx=15,
+                pady=5
+            ).pack(side=tk.LEFT, padx=3)
+
+            tk.Button(
+                frame_btns,
+                text="💰 Settle Up",
+                font=('Segoe UI', 9, 'bold'),
+                bg=COLORES['success'],
+                fg='white',
+                relief=tk.FLAT,
+                cursor='hand2',
+                command=lambda gid=grupo_id: self.ventana_settle_up(gid),
+                padx=15,
+                pady=5
+            ).pack(side=tk.LEFT, padx=3)
+
+            tk.Button(
+                frame_btns,
+                text="👥 Participantes",
+                font=('Segoe UI', 9, 'bold'),
+                bg=COLORES['secondary'],
+                fg='white',
+                relief=tk.FLAT,
+                cursor='hand2',
+                command=lambda gid=grupo_id: self.ventana_participantes_grupo(gid),
+                padx=15,
+                pady=5
+            ).pack(side=tk.LEFT, padx=3)
+
+            tk.Button(
+                frame_btns,
+                text="📋 Ver Gastos",
+                font=('Segoe UI', 9, 'bold'),
+                bg=COLORES['warning'],
+                fg='white',
+                relief=tk.FLAT,
+                cursor='hand2',
+                command=lambda gid=grupo_id: self.ventana_ver_gastos_grupo(gid),
+                padx=15,
+                pady=5
+            ).pack(side=tk.LEFT, padx=3)
+
+    def ventana_nuevo_grupo_splitwise(self):
+        """Ventana para crear un nuevo grupo de Splitwise"""
+        v = tk.Toplevel(self.root)
+        v.title("➕ Nuevo Grupo Splitwise")
+        v.geometry("450x400")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+        v.grab_set()
+
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (450 // 2)
+        y = (v.winfo_screenheight() // 2) - (400 // 2)
+        v.geometry(f'450x400+{x}+{y}')
+
+        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(frame, text="📝 Nombre del grupo:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        entry_nombre = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_nombre.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="📄 Descripción (opcional):", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        entry_desc = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_desc.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="🎨 Icono:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        iconos = ['👥', '🏠', '✈️', '🍕', '🎉', '🏖️', '⚽', '🎬', '🍺', '💼']
+        combo_icono = ttk.Combobox(frame, values=iconos, state='readonly', font=('Segoe UI', 11))
+        combo_icono.set('👥')
+        combo_icono.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="👥 Tipo:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        tipos = ['general', 'viaje', 'casa', 'pareja', 'evento']
+        combo_tipo = ttk.Combobox(frame, values=tipos, state='readonly', font=('Segoe UI', 11))
+        combo_tipo.set('general')
+        combo_tipo.pack(fill=tk.X, pady=3)
+
+        def guardar():
+            nombre = entry_nombre.get().strip()
+            if not nombre:
+                messagebox.showwarning("Error", "Ingresá un nombre para el grupo")
+                return
+
+            grupo_id = self.db.crear_grupo_splitwise(
+                nombre,
+                entry_desc.get().strip(),
+                combo_tipo.get(),
+                combo_icono.get()
+            )
+
+            messagebox.showinfo("Éxito", f"✅ Grupo '{nombre}' creado!\n\nAhora agregá participantes al grupo.")
+            v.destroy()
+            self.mostrar_splitwise()
+            # Abrir ventana de participantes automáticamente
+            self.ventana_participantes_grupo(grupo_id)
+
+        frame_btns = tk.Frame(frame, bg=COLORES['background'])
+        frame_btns.pack(pady=20)
+
+        tk.Button(
+            frame_btns,
+            text="✅ Crear Grupo",
+            command=guardar,
+            bg=COLORES['success'],
+            fg='white',
+            font=('Segoe UI', 11, 'bold'),
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=25,
+            pady=10
+        ).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(
+            frame_btns,
+            text="❌ Cancelar",
+            command=v.destroy,
+            bg=COLORES['danger'],
+            fg='white',
+            font=('Segoe UI', 10),
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=25,
+            pady=10
+        ).pack(side=tk.LEFT, padx=5)
+
+    def ventana_participantes_grupo(self, grupo_id):
+        """Gestionar participantes de un grupo"""
+        v = tk.Toplevel(self.root)
+        v.title("👥 Participantes del Grupo")
+        v.geometry("500x550")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (500 // 2)
+        y = (v.winfo_screenheight() // 2) - (550 // 2)
+        v.geometry(f'500x550+{x}+{y}')
+
+        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(
+            frame,
+            text="👥 Participantes",
+            font=('Segoe UI', 16, 'bold'),
+            bg=COLORES['background']
+        ).pack(pady=10)
+
+        # Formulario para agregar participante
+        frame_form = tk.Frame(frame, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+        frame_form.pack(fill=tk.X, pady=10)
+
+        tk.Label(
+            frame_form,
+            text="➕ Agregar Participante",
+            font=('Segoe UI', 12, 'bold'),
+            bg=COLORES['card_bg']
+        ).pack(pady=10)
+
+        frame_inputs = tk.Frame(frame_form, bg=COLORES['card_bg'])
+        frame_inputs.pack(padx=15, pady=5)
+
+        tk.Label(frame_inputs, text="Nombre:", bg=COLORES['card_bg'], font=('Segoe UI', 10)).grid(row=0, column=0, sticky='w', pady=5)
+        entry_nombre = tk.Entry(frame_inputs, font=('Segoe UI', 10), width=20)
+        entry_nombre.grid(row=0, column=1, padx=5, pady=5)
+
+        tk.Label(frame_inputs, text="Email (opcional):", bg=COLORES['card_bg'], font=('Segoe UI', 10)).grid(row=1, column=0, sticky='w', pady=5)
+        entry_email = tk.Entry(frame_inputs, font=('Segoe UI', 10), width=20)
+        entry_email.grid(row=1, column=1, padx=5, pady=5)
+
+        def agregar_participante():
+            nombre = entry_nombre.get().strip()
+            if not nombre:
+                messagebox.showwarning("Error", "Ingresá un nombre")
+                return
+
+            self.db.agregar_participante_splitwise(grupo_id, nombre, entry_email.get().strip())
+            entry_nombre.delete(0, tk.END)
+            entry_email.delete(0, tk.END)
+            actualizar_lista()
+
+        tk.Button(
+            frame_form,
+            text="➕ Agregar",
+            command=agregar_participante,
+            bg=COLORES['success'],
+            fg='white',
+            font=('Segoe UI', 10, 'bold'),
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=20,
+            pady=5
+        ).pack(pady=10)
+
+        # Lista de participantes
+        frame_lista = tk.Frame(frame, bg=COLORES['background'])
+        frame_lista.pack(fill=tk.BOTH, expand=True, pady=10)
+
+        tk.Label(
+            frame_lista,
+            text="📋 Lista de Participantes",
+            font=('Segoe UI', 12, 'bold'),
+            bg=COLORES['background']
+        ).pack(pady=5)
+
+        lista_container = tk.Frame(frame_lista, bg=COLORES['background'])
+        lista_container.pack(fill=tk.BOTH, expand=True)
+
+        def actualizar_lista():
+            for widget in lista_container.winfo_children():
+                widget.destroy()
+
+            participantes = self.db.obtener_participantes_grupo(grupo_id)
+
+            if not participantes:
+                tk.Label(
+                    lista_container,
+                    text="No hay participantes todavía",
+                    font=('Segoe UI', 10),
+                    bg=COLORES['background'],
+                    fg='gray'
+                ).pack(pady=20)
+            else:
+                for p in participantes:
+                    nombre = p[2]
+                    email = p[3]
+
+                    frame_p = tk.Frame(lista_container, bg=COLORES['card_bg'], relief=tk.RAISED, bd=1)
+                    frame_p.pack(fill=tk.X, pady=3)
+
+                    tk.Label(
+                        frame_p,
+                        text=f"👤 {nombre}",
+                        font=('Segoe UI', 11, 'bold'),
+                        bg=COLORES['card_bg']
+                    ).pack(side=tk.LEFT, padx=10, pady=8)
+
+                    if email:
+                        tk.Label(
+                            frame_p,
+                            text=email,
+                            font=('Segoe UI', 9),
+                            bg=COLORES['card_bg'],
+                            fg='gray'
+                        ).pack(side=tk.LEFT, padx=5)
+
+        actualizar_lista()
+
+        tk.Button(
+            frame,
+            text="✅ Cerrar",
+            command=v.destroy,
+            bg=COLORES['primary'],
+            fg='white',
+            font=('Segoe UI', 11, 'bold'),
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=30,
+            pady=10
+        ).pack(pady=10)
+
+    def ventana_agregar_gasto_splitwise(self, grupo_id):
+        """Agregar un gasto compartido al grupo"""
+        v = tk.Toplevel(self.root)
+        v.title("➕ Agregar Gasto Compartido")
+        v.geometry("550x600")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+        v.grab_set()
+
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (550 // 2)
+        y = (v.winfo_screenheight() // 2) - (600 // 2)
+        v.geometry(f'550x600+{x}+{y}')
+
+        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(
+            frame,
+            text="➕ Nuevo Gasto Compartido",
+            font=('Segoe UI', 16, 'bold'),
+            bg=COLORES['background']
+        ).pack(pady=10)
+
+        # Obtener participantes
+        participantes = self.db.obtener_participantes_grupo(grupo_id)
+        if not participantes:
+            messagebox.showwarning("Error", "Primero debés agregar participantes al grupo")
+            v.destroy()
+            return
+
+        nombres_participantes = [p[2] for p in participantes]
+
+        # Formulario
+        tk.Label(frame, text="📝 Descripción:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        entry_desc = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_desc.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="💰 Monto total:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        entry_monto = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_monto.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="💳 Pagado por:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        combo_pagador = ttk.Combobox(frame, values=nombres_participantes, state='readonly', font=('Segoe UI', 11))
+        if nombres_participantes:
+            combo_pagador.set(nombres_participantes[0])
+        combo_pagador.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="📂 Categoría (opcional):", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        entry_categoria = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_categoria.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="🔀 Método de división:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        metodos = ['equitativa', 'porcentajes', 'montos', 'partes']
+        combo_metodo = ttk.Combobox(frame, values=metodos, state='readonly', font=('Segoe UI', 11))
+        combo_metodo.set('equitativa')
+        combo_metodo.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="📋 Notas (opcional):", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        entry_notas = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_notas.pack(fill=tk.X, pady=3)
+
+        def guardar():
+            descripcion = entry_desc.get().strip()
+            monto_str = entry_monto.get().strip()
+            pagador = combo_pagador.get()
+
+            if not descripcion or not monto_str or not pagador:
+                messagebox.showwarning("Error", "Completá todos los campos obligatorios")
+                return
+
+            try:
+                monto = float(monto_str.replace(',', '.'))
+                if monto <= 0:
+                    raise ValueError()
+
+                # Por ahora solo división equitativa (se puede extender)
+                metodo = combo_metodo.get()
+
+                self.db.agregar_gasto_splitwise(
+                    grupo_id,
+                    descripcion,
+                    monto,
+                    pagador,
+                    metodo,
+                    None,  # divisiones automáticas
+                    entry_categoria.get().strip(),
+                    entry_notas.get().strip()
+                )
+
+                messagebox.showinfo("Éxito", f"✅ Gasto agregado: ${monto:,.2f}")
+                v.destroy()
+                self.mostrar_splitwise()
+
+            except ValueError:
+                messagebox.showerror("Error", "Monto inválido")
+
+        frame_btns = tk.Frame(frame, bg=COLORES['background'])
+        frame_btns.pack(pady=20)
+
+        tk.Button(
+            frame_btns,
+            text="💾 Guardar Gasto",
+            command=guardar,
+            bg=COLORES['success'],
+            fg='white',
+            font=('Segoe UI', 11, 'bold'),
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=25,
+            pady=10
+        ).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(
+            frame_btns,
+            text="❌ Cancelar",
+            command=v.destroy,
+            bg=COLORES['danger'],
+            fg='white',
+            font=('Segoe UI', 10),
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=25,
+            pady=10
+        ).pack(side=tk.LEFT, padx=5)
+
+    def ventana_settle_up(self, grupo_id):
+        """Ventana para saldar deudas del grupo"""
+        v = tk.Toplevel(self.root)
+        v.title("💰 Settle Up - Saldar Cuentas")
+        v.geometry("600x650")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (600 // 2)
+        y = (v.winfo_screenheight() // 2) - (650 // 2)
+        v.geometry(f'600x650+{x}+{y}')
+
+        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(
+            frame,
+            text="💰 Settle Up - Cómo Saldar Cuentas",
+            font=('Segoe UI', 16, 'bold'),
+            bg=COLORES['background']
+        ).pack(pady=10)
+
+        # Mostrar deudas simplificadas
+        transacciones = self.db.simplificar_deudas_grupo(grupo_id)
+
+        if not transacciones:
+            tk.Label(
+                frame,
+                text="✅ ¡Todas las cuentas están saldadas!\n\nNo hay deudas pendientes en este grupo.",
+                font=('Segoe UI', 12),
+                bg=COLORES['background'],
+                fg=COLORES['success'],
+                justify=tk.CENTER
+            ).pack(expand=True, pady=50)
+        else:
+            tk.Label(
+                frame,
+                text=f"📊 Para saldar todas las deudas, se necesitan {len(transacciones)} transferencias:",
+                font=('Segoe UI', 11),
+                bg=COLORES['background'],
+                fg='gray'
+            ).pack(pady=10)
+
+            # Frame con scroll para transacciones
+            frame_scroll = tk.Frame(frame, bg=COLORES['background'])
+            frame_scroll.pack(fill=tk.BOTH, expand=True, pady=10)
+
+            canvas = tk.Canvas(frame_scroll, bg=COLORES['background'], highlightthickness=0, height=300)
+            scrollbar = tk.Scrollbar(frame_scroll, orient="vertical", command=canvas.yview)
+            frame_trans = tk.Frame(canvas, bg=COLORES['background'])
+
+            frame_trans.bind(
+                "<Configure>",
+                lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+            )
+
+            canvas.create_window((0, 0), window=frame_trans, anchor="nw")
+            canvas.configure(yscrollcommand=scrollbar.set)
+
+            canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+            for i, (deudor, acreedor, monto) in enumerate(transacciones, 1):
+                frame_t = tk.Frame(frame_trans, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+                frame_t.pack(fill=tk.X, pady=5)
+
+                # Número de transacción
+                tk.Label(
+                    frame_t,
+                    text=f"#{i}",
+                    font=('Segoe UI', 10, 'bold'),
+                    bg=COLORES['secondary'],
+                    fg='white',
+                    width=3
+                ).pack(side=tk.LEFT, fill=tk.Y)
+
+                # Detalles de la transacción
+                frame_detalles = tk.Frame(frame_t, bg=COLORES['card_bg'])
+                frame_detalles.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=15, pady=10)
+
+                tk.Label(
+                    frame_detalles,
+                    text=f"👤 {deudor}  →  👤 {acreedor}",
+                    font=('Segoe UI', 11, 'bold'),
+                    bg=COLORES['card_bg']
+                ).pack(anchor='w')
+
+                tk.Label(
+                    frame_detalles,
+                    text=f"💰 ${monto:,.2f}",
+                    font=('Segoe UI', 14, 'bold'),
+                    bg=COLORES['card_bg'],
+                    fg=COLORES['success']
+                ).pack(anchor='w')
+
+                # Botón para marcar como pagado
+                def marcar_pagado(d=deudor, a=acreedor, m=monto):
+                    if messagebox.askyesno("Confirmar Pago", f"¿Confirmar que {d} le pagó ${m:,.2f} a {a}?"):
+                        self.db.registrar_pago_splitwise(grupo_id, d, a, m, f"Settle Up #{i}")
+                        messagebox.showinfo("✅ Pago Registrado", "El pago ha sido registrado correctamente")
+                        v.destroy()
+                        self.mostrar_splitwise()
+
+                tk.Button(
+                    frame_t,
+                    text="✅ Marcar\nPagado",
+                    font=('Segoe UI', 8, 'bold'),
+                    bg=COLORES['success'],
+                    fg='white',
+                    relief=tk.FLAT,
+                    cursor='hand2',
+                    command=marcar_pagado,
+                    padx=10,
+                    pady=5
+                ).pack(side=tk.RIGHT, padx=10)
+
+            # Información adicional
+            frame_info = tk.Frame(frame, bg=COLORES['light'], relief=tk.RAISED, bd=2)
+            frame_info.pack(fill=tk.X, pady=10)
+
+            tk.Label(
+                frame_info,
+                text="💡 Consejo",
+                font=('Segoe UI', 11, 'bold'),
+                bg=COLORES['light']
+            ).pack(pady=5)
+
+            tk.Label(
+                frame_info,
+                text="Estas son las transacciones mínimas necesarias para saldar todas las deudas.\n"
+                     "Marcá cada pago como completado una vez que se haya realizado la transferencia.",
+                font=('Segoe UI', 9),
+                bg=COLORES['light'],
+                fg='gray',
+                justify=tk.CENTER
+            ).pack(padx=15, pady=5)
+
+        tk.Button(
+            frame,
+            text="✅ Cerrar",
+            command=v.destroy,
+            bg=COLORES['primary'],
+            fg='white',
+            font=('Segoe UI', 11, 'bold'),
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=30,
+            pady=10
+        ).pack(pady=10)
+
+    def ventana_ver_gastos_grupo(self, grupo_id):
+        """Ver todos los gastos de un grupo"""
+        v = tk.Toplevel(self.root)
+        v.title("📋 Gastos del Grupo")
+        v.geometry("700x600")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (700 // 2)
+        y = (v.winfo_screenheight() // 2) - (600 // 2)
+        v.geometry(f'700x600+{x}+{y}')
+
+        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        # Obtener nombre del grupo
+        cursor = self.db.conn.cursor()
+        cursor.execute('SELECT nombre FROM grupos_splitwise WHERE id = ?', (grupo_id,))
+        grupo_info = cursor.fetchone()
+        nombre_grupo = grupo_info[0] if grupo_info else "Grupo"
+
+        tk.Label(
+            frame,
+            text=f"📋 Gastos de: {nombre_grupo}",
+            font=('Segoe UI', 16, 'bold'),
+            bg=COLORES['background']
+        ).pack(pady=10)
+
+        # Obtener gastos
+        gastos = self.db.obtener_gastos_grupo(grupo_id)
+
+        if not gastos:
+            tk.Label(
+                frame,
+                text="No hay gastos registrados en este grupo",
+                font=('Segoe UI', 12),
+                bg=COLORES['background'],
+                fg='gray'
+            ).pack(expand=True, pady=50)
+        else:
+            # Frame con scroll
+            frame_scroll = tk.Frame(frame, bg=COLORES['background'])
+            frame_scroll.pack(fill=tk.BOTH, expand=True)
+
+            canvas = tk.Canvas(frame_scroll, bg=COLORES['background'], highlightthickness=0)
+            scrollbar = tk.Scrollbar(frame_scroll, orient="vertical", command=canvas.yview)
+            frame_gastos = tk.Frame(canvas, bg=COLORES['background'])
+
+            frame_gastos.bind(
+                "<Configure>",
+                lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+            )
+
+            canvas.create_window((0, 0), window=frame_gastos, anchor="nw")
+            canvas.configure(yscrollcommand=scrollbar.set)
+
+            canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+            for gasto in gastos:
+                descripcion = gasto[2]
+                monto = gasto[3]
+                pagado_por = gasto[4]
+                fecha = gasto[5]
+                categoria = gasto[6] if gasto[6] else ''
+
+                frame_g = tk.Frame(frame_gastos, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+                frame_g.pack(fill=tk.X, pady=5)
+
+                # Header del gasto
+                frame_g_header = tk.Frame(frame_g, bg=COLORES['info'])
+                frame_g_header.pack(fill=tk.X)
+
+                tk.Label(
+                    frame_g_header,
+                    text=descripcion,
+                    font=('Segoe UI', 12, 'bold'),
+                    bg=COLORES['info'],
+                    fg='white'
+                ).pack(side=tk.LEFT, padx=15, pady=8)
+
+                tk.Label(
+                    frame_g_header,
+                    text=f"${monto:,.2f}",
+                    font=('Segoe UI', 12, 'bold'),
+                    bg=COLORES['info'],
+                    fg='white'
+                ).pack(side=tk.RIGHT, padx=15, pady=8)
+
+                # Detalles
+                frame_detalles = tk.Frame(frame_g, bg=COLORES['card_bg'])
+                frame_detalles.pack(fill=tk.X, padx=15, pady=8)
+
+                tk.Label(
+                    frame_detalles,
+                    text=f"💳 Pagado por: {pagado_por}",
+                    font=('Segoe UI', 10),
+                    bg=COLORES['card_bg']
+                ).pack(anchor='w')
+
+                tk.Label(
+                    frame_detalles,
+                    text=f"📅 Fecha: {fecha}",
+                    font=('Segoe UI', 10),
+                    bg=COLORES['card_bg'],
+                    fg='gray'
+                ).pack(anchor='w')
+
+                if categoria:
+                    tk.Label(
+                        frame_detalles,
+                        text=f"📂 {categoria}",
+                        font=('Segoe UI', 9),
+                        bg=COLORES['card_bg'],
+                        fg='gray'
+                    ).pack(anchor='w')
+
+        tk.Button(
+            frame,
+            text="✅ Cerrar",
+            command=v.destroy,
+            bg=COLORES['primary'],
+            fg='white',
+            font=('Segoe UI', 11, 'bold'),
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=30,
+            pady=10
+        ).pack(pady=10)
 
     def ventana_conversor(self):
         """Ventana de conversor de monedas múltiples"""
