@@ -498,6 +498,81 @@ class Database:
             )
         ''')
 
+        # Tablas inspiradas en Buddy
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS presupuestos_compartidos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                categoria TEXT,
+                limite REAL NOT NULL,
+                mes TEXT NOT NULL,
+                moneda TEXT DEFAULT 'ARS',
+                compartido INTEGER DEFAULT 0,
+                creado_por TEXT NOT NULL,
+                fecha_creacion TEXT NOT NULL,
+                descripcion TEXT,
+                icono TEXT DEFAULT '💰'
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS participantes_presupuesto (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                presupuesto_id INTEGER NOT NULL,
+                nombre TEXT NOT NULL,
+                email TEXT,
+                rol TEXT DEFAULT 'viewer',
+                fecha_agregado TEXT NOT NULL,
+                activo INTEGER DEFAULT 1,
+                FOREIGN KEY (presupuesto_id) REFERENCES presupuestos_compartidos(id)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS alertas_configuracion (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tipo_alerta TEXT NOT NULL,
+                categoria TEXT,
+                umbral_porcentaje INTEGER DEFAULT 80,
+                activa INTEGER DEFAULT 1,
+                frecuencia TEXT DEFAULT 'inmediata',
+                ultima_notificacion TEXT,
+                parametros TEXT
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS temas_colores (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT UNIQUE NOT NULL,
+                primary_color TEXT NOT NULL,
+                secondary_color TEXT NOT NULL,
+                success_color TEXT NOT NULL,
+                danger_color TEXT NOT NULL,
+                warning_color TEXT NOT NULL,
+                info_color TEXT NOT NULL,
+                background_color TEXT NOT NULL,
+                card_bg_color TEXT NOT NULL,
+                activo INTEGER DEFAULT 0
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS notificaciones_buddy (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tipo TEXT NOT NULL,
+                titulo TEXT NOT NULL,
+                mensaje TEXT NOT NULL,
+                categoria TEXT,
+                presupuesto_id INTEGER,
+                nivel TEXT DEFAULT 'info',
+                fecha TEXT NOT NULL,
+                leida INTEGER DEFAULT 0,
+                accion_requerida INTEGER DEFAULT 0,
+                FOREIGN KEY (presupuesto_id) REFERENCES presupuestos_compartidos(id)
+            )
+        ''')
+
         self.conn.commit()
 
     def inicializar_datos(self):
@@ -534,6 +609,29 @@ class Database:
                 INSERT OR IGNORE INTO logros (nombre, descripcion, icono, progreso_objetivo)
                 VALUES (?, ?, ?, ?)
             ''', (nombre, desc, icono, objetivo))
+
+        # Temas de colores predefinidos (estilo Buddy)
+        temas_default = [
+            ('Default', '#2563eb', '#64748b', '#10b981', '#ef4444', '#f59e0b', '#3b82f6', '#f8f9fa', '#ffffff'),
+            ('Dark', '#3b82f6', '#475569', '#22c55e', '#f87171', '#fb923c', '#60a5fa', '#1e293b', '#0f172a'),
+            ('Ocean', '#0891b2', '#0e7490', '#14b8a6', '#f43f5e', '#f97316', '#06b6d4', '#ecfeff', '#cffafe'),
+            ('Forest', '#16a34a', '#15803d', '#22c55e', '#dc2626', '#ea580c', '#4ade80', '#f0fdf4', '#dcfce7'),
+            ('Sunset', '#dc2626', '#b91c1c', '#f97316', '#ef4444', '#facc15', '#fb923c', '#fff7ed', '#fed7aa'),
+            ('Purple', '#9333ea', '#7c3aed', '#a78bfa', '#f43f5e', '#fb7185', '#c084fc', '#faf5ff', '#f3e8ff'),
+            ('Minimal', '#000000', '#52525b', '#059669', '#dc2626', '#d97706', '#0284c7', '#ffffff', '#f5f5f5')
+        ]
+
+        for nombre, primary, secondary, success, danger, warning, info, bg, card_bg in temas_default:
+            cursor.execute('''
+                INSERT OR IGNORE INTO temas_colores (nombre, primary_color, secondary_color, success_color,
+                                                     danger_color, warning_color, info_color, background_color, card_bg_color, activo)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (nombre, primary, secondary, success, danger, warning, info, bg, card_bg, 1 if nombre == 'Default' else 0))
+
+        # Configuraciones de alertas proactivas (estilo Buddy)
+        cursor.execute('INSERT OR IGNORE INTO alertas_configuracion (tipo_alerta, umbral_porcentaje) VALUES (?, ?)', ('presupuesto_porcentaje', 80))
+        cursor.execute('INSERT OR IGNORE INTO alertas_configuracion (tipo_alerta, umbral_porcentaje) VALUES (?, ?)', ('presupuesto_porcentaje', 90))
+        cursor.execute('INSERT OR IGNORE INTO alertas_configuracion (tipo_alerta, umbral_porcentaje) VALUES (?, ?)', ('presupuesto_porcentaje', 100))
 
         self.conn.commit()
 
@@ -1500,6 +1598,214 @@ class Database:
         ''', (grupo_id, pagador, receptor, monto, datetime.date.today().isoformat(), notas))
         self.conn.commit()
 
+    # === BUDDY - PRESUPUESTOS COMPARTIDOS ===
+    def crear_presupuesto_compartido(self, nombre, categoria, limite, mes, creado_por, compartido=False, descripcion='', icono='💰'):
+        """Crea un presupuesto compartido estilo Buddy"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT INTO presupuestos_compartidos (nombre, categoria, limite, mes, compartido, creado_por, fecha_creacion, descripcion, icono)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (nombre, categoria, limite, mes, 1 if compartido else 0, creado_por, datetime.date.today().isoformat(), descripcion, icono))
+        self.conn.commit()
+        return cursor.lastrowid
+
+    def obtener_presupuestos_compartidos(self):
+        """Obtiene todos los presupuestos compartidos"""
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT * FROM presupuestos_compartidos ORDER BY fecha_creacion DESC')
+        return cursor.fetchall()
+
+    def agregar_participante_presupuesto(self, presupuesto_id, nombre, email='', rol='viewer'):
+        """Agrega un participante a un presupuesto compartido"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT INTO participantes_presupuesto (presupuesto_id, nombre, email, rol, fecha_agregado)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (presupuesto_id, nombre, email, rol, datetime.date.today().isoformat()))
+        self.conn.commit()
+
+    def obtener_participantes_presupuesto(self, presupuesto_id):
+        """Obtiene los participantes de un presupuesto"""
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT * FROM participantes_presupuesto WHERE presupuesto_id = ? AND activo = 1', (presupuesto_id,))
+        return cursor.fetchall()
+
+    def calcular_uso_presupuesto_compartido(self, presupuesto_id):
+        """Calcula el uso actual de un presupuesto compartido"""
+        cursor = self.conn.cursor()
+
+        # Obtener info del presupuesto
+        cursor.execute('SELECT categoria, mes, limite FROM presupuestos_compartidos WHERE id = ?', (presupuesto_id,))
+        presup = cursor.fetchone()
+
+        if not presup:
+            return 0, 0, 0
+
+        categoria = presup[0]
+        mes = presup[1]
+        limite = presup[2]
+
+        # Calcular gastos del mes en esa categoría
+        if categoria:
+            cursor.execute('''
+                SELECT COALESCE(SUM(monto), 0) FROM gastos
+                WHERE strftime('%Y-%m', fecha) = ? AND categoria = ?
+            ''', (mes, categoria))
+        else:
+            # Si no hay categoría específica, todos los gastos del mes
+            cursor.execute('''
+                SELECT COALESCE(SUM(monto), 0) FROM gastos
+                WHERE strftime('%Y-%m', fecha) = ?
+            ''', (mes,))
+
+        gastado = cursor.fetchone()[0]
+        porcentaje = (gastado / limite * 100) if limite > 0 else 0
+
+        return gastado, limite, porcentaje
+
+    # === BUDDY - SISTEMA DE ALERTAS PROACTIVAS ===
+    def crear_alerta_configuracion(self, tipo_alerta, categoria=None, umbral_porcentaje=80, activa=True):
+        """Configura una alerta proactiva"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT INTO alertas_configuracion (tipo_alerta, categoria, umbral_porcentaje, activa)
+            VALUES (?, ?, ?, ?)
+        ''', (tipo_alerta, categoria, umbral_porcentaje, 1 if activa else 0))
+        self.conn.commit()
+
+    def obtener_alertas_configuracion(self):
+        """Obtiene todas las configuraciones de alertas"""
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT * FROM alertas_configuracion WHERE activa = 1')
+        return cursor.fetchall()
+
+    def verificar_alertas_presupuesto(self):
+        """Verifica y genera alertas proactivas de presupuestos"""
+        alertas_generadas = []
+        cursor = self.conn.cursor()
+
+        # Obtener configuraciones de alertas activas
+        configs = self.obtener_alertas_configuracion()
+
+        # Verificar cada presupuesto compartido
+        presupuestos = self.obtener_presupuestos_compartidos()
+
+        for presup in presupuestos:
+            presup_id = presup[0]
+            nombre = presup[1]
+            categoria = presup[2]
+
+            gastado, limite, porcentaje = self.calcular_uso_presupuesto_compartido(presup_id)
+
+            # Verificar umbrales de alertas
+            for config in configs:
+                tipo = config[1]
+                umbral = config[3]
+
+                if tipo == 'presupuesto_porcentaje' and porcentaje >= umbral:
+                    # Verificar si ya se notificó recientemente
+                    cursor.execute('''
+                        SELECT fecha FROM notificaciones_buddy
+                        WHERE presupuesto_id = ? AND tipo = 'presupuesto_excedido'
+                        ORDER BY fecha DESC LIMIT 1
+                    ''', (presup_id,))
+
+                    ultima = cursor.fetchone()
+
+                    # Solo notificar si no se ha notificado hoy
+                    debe_notificar = True
+                    if ultima:
+                        ultima_fecha = datetime.datetime.fromisoformat(ultima[0]).date()
+                        debe_notificar = ultima_fecha < datetime.date.today()
+
+                    if debe_notificar:
+                        if porcentaje >= 100:
+                            nivel = 'danger'
+                            titulo = f"⚠️ Presupuesto Excedido: {nombre}"
+                            mensaje = f"Te pasaste del presupuesto! Gastaste ${gastado:,.0f} de ${limite:,.0f} ({porcentaje:.0f}%)"
+                        elif porcentaje >= 90:
+                            nivel = 'warning'
+                            titulo = f"⚠️ Alerta: {nombre}"
+                            mensaje = f"Estás al {porcentaje:.0f}% del presupuesto (${gastado:,.0f} de ${limite:,.0f})"
+                        else:
+                            nivel = 'info'
+                            titulo = f"📊 Aviso: {nombre}"
+                            mensaje = f"Usaste el {porcentaje:.0f}% del presupuesto (${gastado:,.0f} de ${limite:,.0f})"
+
+                        self.crear_notificacion_buddy(
+                            tipo='presupuesto_excedido',
+                            titulo=titulo,
+                            mensaje=mensaje,
+                            categoria=categoria,
+                            presupuesto_id=presup_id,
+                            nivel=nivel,
+                            accion_requerida=1 if porcentaje >= 100 else 0
+                        )
+
+                        alertas_generadas.append({
+                            'titulo': titulo,
+                            'mensaje': mensaje,
+                            'nivel': nivel
+                        })
+
+        return alertas_generadas
+
+    def crear_notificacion_buddy(self, tipo, titulo, mensaje, categoria=None, presupuesto_id=None, nivel='info', accion_requerida=0):
+        """Crea una notificación estilo Buddy"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT INTO notificaciones_buddy (tipo, titulo, mensaje, categoria, presupuesto_id, nivel, fecha, accion_requerida)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (tipo, titulo, mensaje, categoria, presupuesto_id, nivel, datetime.datetime.now().isoformat(), accion_requerida))
+        self.conn.commit()
+
+    def obtener_notificaciones_buddy(self, solo_no_leidas=False):
+        """Obtiene notificaciones de Buddy"""
+        cursor = self.conn.cursor()
+        if solo_no_leidas:
+            cursor.execute('SELECT * FROM notificaciones_buddy WHERE leida = 0 ORDER BY fecha DESC LIMIT 50')
+        else:
+            cursor.execute('SELECT * FROM notificaciones_buddy ORDER BY fecha DESC LIMIT 100')
+        return cursor.fetchall()
+
+    def marcar_notificacion_leida(self, notif_id):
+        """Marca una notificación como leída"""
+        cursor = self.conn.cursor()
+        cursor.execute('UPDATE notificaciones_buddy SET leida = 1 WHERE id = ?', (notif_id,))
+        self.conn.commit()
+
+    # === BUDDY - TEMAS DE COLORES ===
+    def crear_tema_color(self, nombre, primary, secondary, success, danger, warning, info, background, card_bg):
+        """Crea un nuevo tema de colores"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT INTO temas_colores (nombre, primary_color, secondary_color, success_color, danger_color,
+                                      warning_color, info_color, background_color, card_bg_color)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (nombre, primary, secondary, success, danger, warning, info, background, card_bg))
+        self.conn.commit()
+
+    def obtener_temas_disponibles(self):
+        """Obtiene todos los temas de colores disponibles"""
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT * FROM temas_colores')
+        return cursor.fetchall()
+
+    def activar_tema(self, tema_id):
+        """Activa un tema de colores"""
+        cursor = self.conn.cursor()
+        # Desactivar todos los temas
+        cursor.execute('UPDATE temas_colores SET activo = 0')
+        # Activar el tema seleccionado
+        cursor.execute('UPDATE temas_colores SET activo = 1 WHERE id = ?', (tema_id,))
+        self.conn.commit()
+
+    def obtener_tema_activo(self):
+        """Obtiene el tema de colores activo"""
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT * FROM temas_colores WHERE activo = 1 LIMIT 1')
+        return cursor.fetchone()
+
     def cerrar(self):
         self.conn.close()
 
@@ -1911,6 +2217,9 @@ class GestorGastos:
             ("📍 Geofence", 'geofence', self.mostrar_geofence),
             ("🏆 FinScore", 'finscore', self.mostrar_finscore),
             ("👥 Splitwise", 'splitwise', self.mostrar_splitwise),
+            ("🤝 Buddy Presupuestos", 'buddy_presupuestos', self.mostrar_buddy_presupuestos),
+            ("🔔 Notificaciones Buddy", 'buddy_notificaciones', self.mostrar_buddy_notificaciones),
+            ("🎨 Temas", 'temas', self.mostrar_temas),
             ("🎮 Logros", 'logros', self.mostrar_logros),
             ("💱 Conversor", 'conversor', self.ventana_conversor),
         ]
@@ -5503,6 +5812,738 @@ class GestorGastos:
             padx=30,
             pady=10
         ).pack(pady=10)
+
+    # === BUDDY - PRESUPUESTOS COMPARTIDOS ===
+    def mostrar_buddy_presupuestos(self):
+        """Vista de presupuestos compartidos estilo Buddy"""
+        # Header
+        frame_header = tk.Frame(self.frame_contenido, bg=COLORES['primary'], height=80)
+        frame_header.pack(fill=tk.X, padx=15, pady=15)
+        frame_header.pack_propagate(False)
+
+        tk.Label(
+            frame_header,
+            text="🤝 Buddy - Presupuestos Compartidos",
+            font=('Segoe UI', 18, 'bold'),
+            bg=COLORES['primary'],
+            fg='white'
+        ).pack(side=tk.LEFT, padx=20, pady=20)
+
+        tk.Button(
+            frame_header,
+            text="➕ Nuevo Presupuesto",
+            font=('Segoe UI', 11, 'bold'),
+            bg=COLORES['success'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=self.ventana_nuevo_presupuesto_buddy,
+            padx=20,
+            pady=8
+        ).pack(side=tk.RIGHT, padx=20)
+
+        # Verificar alertas al abrir la vista
+        alertas = self.db.verificar_alertas_presupuesto()
+        if alertas:
+            for alerta in alertas:
+                self.db.crear_alerta(alerta['tipo'] if 'tipo' in alerta else 'info', alerta['mensaje'], alerta['nivel'])
+
+        # Obtener presupuestos
+        presupuestos = self.db.obtener_presupuestos_compartidos()
+
+        if not presupuestos:
+            tk.Label(
+                self.frame_contenido,
+                text="🤝 No tenés presupuestos compartidos\n\nCreá uno para gestionar tus finanzas con tu pareja o familia",
+                font=('Segoe UI', 12),
+                bg=COLORES['background'],
+                fg='gray',
+                justify=tk.CENTER
+            ).pack(expand=True)
+            return
+
+        # Frame con scroll
+        frame_scroll = tk.Frame(self.frame_contenido, bg=COLORES['background'])
+        frame_scroll.pack(fill=tk.BOTH, expand=True, padx=15, pady=10)
+
+        canvas = tk.Canvas(frame_scroll, bg=COLORES['background'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(frame_scroll, orient="vertical", command=canvas.yview)
+        frame_presups = tk.Frame(canvas, bg=COLORES['background'])
+
+        frame_presups.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=frame_presups, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        for presup in presupuestos:
+            presup_id = presup[0]
+            nombre = presup[1]
+            categoria = presup[2] if presup[2] else "General"
+            icono = presup[9] if len(presup) > 9 else '💰'
+            descripcion = presup[8] if len(presup) > 8 and presup[8] else ''
+
+            # Calcular uso
+            gastado, limite, porcentaje = self.db.calcular_uso_presupuesto_compartido(presup_id)
+
+            # Determinar color según porcentaje
+            if porcentaje >= 100:
+                color_barra = COLORES['danger']
+                color_header = COLORES['danger']
+            elif porcentaje >= 90:
+                color_barra = COLORES['warning']
+                color_header = COLORES['warning']
+            elif porcentaje >= 80:
+                color_barra = COLORES['info']
+                color_header = COLORES['info']
+            else:
+                color_barra = COLORES['success']
+                color_header = COLORES['primary']
+
+            # Tarjeta del presupuesto
+            frame_presup = tk.Frame(frame_presups, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+            frame_presup.pack(fill=tk.X, pady=8)
+
+            # Header
+            frame_presup_header = tk.Frame(frame_presup, bg=color_header)
+            frame_presup_header.pack(fill=tk.X)
+
+            tk.Label(
+                frame_presup_header,
+                text=f"{icono} {nombre}",
+                font=('Segoe UI', 14, 'bold'),
+                bg=color_header,
+                fg='white'
+            ).pack(side=tk.LEFT, padx=15, pady=10)
+
+            tk.Label(
+                frame_presup_header,
+                text=categoria,
+                font=('Segoe UI', 9),
+                bg=color_header,
+                fg='white'
+            ).pack(side=tk.RIGHT, padx=15)
+
+            # Descripción
+            if descripcion:
+                tk.Label(
+                    frame_presup,
+                    text=descripcion,
+                    font=('Segoe UI', 9),
+                    bg=COLORES['card_bg'],
+                    fg='gray'
+                ).pack(padx=15, pady=5, anchor='w')
+
+            # Estadísticas
+            frame_stats = tk.Frame(frame_presup, bg=COLORES['card_bg'])
+            frame_stats.pack(fill=tk.X, padx=15, pady=10)
+
+            # Gastado vs Límite
+            tk.Label(
+                frame_stats,
+                text=f"${gastado:,.0f} / ${limite:,.0f}",
+                font=('Segoe UI', 16, 'bold'),
+                bg=COLORES['card_bg'],
+                fg=color_barra
+            ).pack()
+
+            # Barra de progreso
+            frame_barra = tk.Frame(frame_stats, bg='#e5e7eb', height=20)
+            frame_barra.pack(fill=tk.X, pady=5)
+
+            ancho_barra = min(porcentaje, 100)
+            if ancho_barra > 0:
+                frame_progreso = tk.Frame(frame_barra, bg=color_barra, height=20)
+                frame_progreso.place(relwidth=ancho_barra/100, relheight=1)
+
+            tk.Label(
+                frame_barra,
+                text=f"{porcentaje:.1f}%",
+                font=('Segoe UI', 9, 'bold'),
+                bg='#e5e7eb' if porcentaje < 50 else color_barra,
+                fg='gray' if porcentaje < 50 else 'white'
+            ).place(relx=0.5, rely=0.5, anchor='center')
+
+            # Participantes
+            participantes = self.db.obtener_participantes_presupuesto(presup_id)
+            if participantes:
+                frame_part = tk.Frame(frame_presup, bg=COLORES['card_bg'])
+                frame_part.pack(fill=tk.X, padx=15, pady=5)
+
+                tk.Label(
+                    frame_part,
+                    text=f"👥 {len(participantes)} participante(s)",
+                    font=('Segoe UI', 9),
+                    bg=COLORES['card_bg'],
+                    fg='gray'
+                ).pack(anchor='w')
+
+            # Botones
+            frame_btns = tk.Frame(frame_presup, bg=COLORES['card_bg'])
+            frame_btns.pack(fill=tk.X, padx=15, pady=10)
+
+            tk.Button(
+                frame_btns,
+                text="👥 Participantes",
+                font=('Segoe UI', 9, 'bold'),
+                bg=COLORES['secondary'],
+                fg='white',
+                relief=tk.FLAT,
+                cursor='hand2',
+                command=lambda pid=presup_id: self.ventana_participantes_presupuesto(pid),
+                padx=15,
+                pady=5
+            ).pack(side=tk.LEFT, padx=3)
+
+    def ventana_nuevo_presupuesto_buddy(self):
+        """Crear un nuevo presupuesto compartido"""
+        v = tk.Toplevel(self.root)
+        v.title("➕ Nuevo Presupuesto Compartido")
+        v.geometry("500x550")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+        v.grab_set()
+
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (500 // 2)
+        y = (v.winfo_screenheight() // 2) - (550 // 2)
+        v.geometry(f'500x550+{x}+{y}')
+
+        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(
+            frame,
+            text="➕ Nuevo Presupuesto Compartido",
+            font=('Segoe UI', 16, 'bold'),
+            bg=COLORES['background']
+        ).pack(pady=10)
+
+        # Formulario
+        tk.Label(frame, text="📝 Nombre:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        entry_nombre = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_nombre.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="📂 Categoría (opcional):", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        categorias = [c[1] for c in self.db.obtener_categorias()]
+        categorias.insert(0, "Todas las categorías")
+        combo_categoria = ttk.Combobox(frame, values=categorias, state='readonly', font=('Segoe UI', 11))
+        combo_categoria.set("Todas las categorías")
+        combo_categoria.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="💰 Límite mensual:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        entry_limite = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_limite.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="📅 Mes (YYYY-MM):", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        entry_mes = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_mes.insert(0, self.mes_actual)
+        entry_mes.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="👤 Creado por (tu nombre):", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        entry_creado_por = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_creado_por.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="🎨 Icono:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        iconos = ['💰', '🏠', '🍕', '🚗', '✈️', '🛒', '💳', '🎓', '🏥', '🎮']
+        combo_icono = ttk.Combobox(frame, values=iconos, state='readonly', font=('Segoe UI', 11))
+        combo_icono.set('💰')
+        combo_icono.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="📄 Descripción (opcional):", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        entry_desc = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_desc.pack(fill=tk.X, pady=3)
+
+        var_compartido = tk.BooleanVar(value=True)
+        tk.Checkbutton(
+            frame,
+            text="🤝 Presupuesto compartido (puedes invitar a otras personas)",
+            variable=var_compartido,
+            bg=COLORES['background'],
+            font=('Segoe UI', 10)
+        ).pack(pady=10)
+
+        def guardar():
+            nombre = entry_nombre.get().strip()
+            limite_str = entry_limite.get().strip()
+            creado_por = entry_creado_por.get().strip()
+            mes = entry_mes.get().strip()
+
+            if not nombre or not limite_str or not creado_por:
+                messagebox.showwarning("Error", "Completá los campos obligatorios")
+                return
+
+            try:
+                limite = float(limite_str.replace(',', '.'))
+                if limite <= 0:
+                    raise ValueError()
+
+                categoria_sel = combo_categoria.get()
+                categoria = None if categoria_sel == "Todas las categorías" else categoria_sel
+
+                presup_id = self.db.crear_presupuesto_compartido(
+                    nombre,
+                    categoria,
+                    limite,
+                    mes,
+                    creado_por,
+                    var_compartido.get(),
+                    entry_desc.get().strip(),
+                    combo_icono.get()
+                )
+
+                messagebox.showinfo("Éxito", f"✅ Presupuesto '{nombre}' creado!")
+                v.destroy()
+                self.mostrar_buddy_presupuestos()
+
+                # Si es compartido, abrir ventana de participantes
+                if var_compartido.get():
+                    self.ventana_participantes_presupuesto(presup_id)
+
+            except ValueError:
+                messagebox.showerror("Error", "Límite inválido")
+
+        frame_btns = tk.Frame(frame, bg=COLORES['background'])
+        frame_btns.pack(pady=20)
+
+        tk.Button(
+            frame_btns,
+            text="✅ Crear",
+            command=guardar,
+            bg=COLORES['success'],
+            fg='white',
+            font=('Segoe UI', 11, 'bold'),
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=25,
+            pady=10
+        ).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(
+            frame_btns,
+            text="❌ Cancelar",
+            command=v.destroy,
+            bg=COLORES['danger'],
+            fg='white',
+            font=('Segoe UI', 10),
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=25,
+            pady=10
+        ).pack(side=tk.LEFT, padx=5)
+
+    def ventana_participantes_presupuesto(self, presup_id):
+        """Gestionar participantes de un presupuesto compartido"""
+        v = tk.Toplevel(self.root)
+        v.title("👥 Participantes del Presupuesto")
+        v.geometry("500x550")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (500 // 2)
+        y = (v.winfo_screenheight() // 2) - (550 // 2)
+        v.geometry(f'500x550+{x}+{y}')
+
+        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(
+            frame,
+            text="👥 Gestionar Participantes",
+            font=('Segoe UI', 16, 'bold'),
+            bg=COLORES['background']
+        ).pack(pady=10)
+
+        # Formulario para agregar
+        frame_form = tk.Frame(frame, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+        frame_form.pack(fill=tk.X, pady=10)
+
+        tk.Label(
+            frame_form,
+            text="➕ Agregar Participante",
+            font=('Segoe UI', 12, 'bold'),
+            bg=COLORES['card_bg']
+        ).pack(pady=10)
+
+        frame_inputs = tk.Frame(frame_form, bg=COLORES['card_bg'])
+        frame_inputs.pack(padx=15, pady=5)
+
+        tk.Label(frame_inputs, text="Nombre:", bg=COLORES['card_bg'], font=('Segoe UI', 10)).grid(row=0, column=0, sticky='w', pady=5)
+        entry_nombre = tk.Entry(frame_inputs, font=('Segoe UI', 10), width=20)
+        entry_nombre.grid(row=0, column=1, padx=5, pady=5)
+
+        tk.Label(frame_inputs, text="Email:", bg=COLORES['card_bg'], font=('Segoe UI', 10)).grid(row=1, column=0, sticky='w', pady=5)
+        entry_email = tk.Entry(frame_inputs, font=('Segoe UI', 10), width=20)
+        entry_email.grid(row=1, column=1, padx=5, pady=5)
+
+        tk.Label(frame_inputs, text="Rol:", bg=COLORES['card_bg'], font=('Segoe UI', 10)).grid(row=2, column=0, sticky='w', pady=5)
+        combo_rol = ttk.Combobox(frame_inputs, values=['viewer', 'contributor', 'admin'], state='readonly', font=('Segoe UI', 10))
+        combo_rol.set('viewer')
+        combo_rol.grid(row=2, column=1, padx=5, pady=5)
+
+        def agregar():
+            nombre = entry_nombre.get().strip()
+            if not nombre:
+                messagebox.showwarning("Error", "Ingresá un nombre")
+                return
+
+            self.db.agregar_participante_presupuesto(presup_id, nombre, entry_email.get().strip(), combo_rol.get())
+            entry_nombre.delete(0, tk.END)
+            entry_email.delete(0, tk.END)
+            actualizar_lista()
+
+        tk.Button(
+            frame_form,
+            text="➕ Agregar",
+            command=agregar,
+            bg=COLORES['success'],
+            fg='white',
+            font=('Segoe UI', 10, 'bold'),
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=20,
+            pady=5
+        ).pack(pady=10)
+
+        # Lista
+        frame_lista = tk.Frame(frame, bg=COLORES['background'])
+        frame_lista.pack(fill=tk.BOTH, expand=True, pady=10)
+
+        tk.Label(
+            frame_lista,
+            text="📋 Participantes Actuales",
+            font=('Segoe UI', 12, 'bold'),
+            bg=COLORES['background']
+        ).pack(pady=5)
+
+        lista_container = tk.Frame(frame_lista, bg=COLORES['background'])
+        lista_container.pack(fill=tk.BOTH, expand=True)
+
+        def actualizar_lista():
+            for widget in lista_container.winfo_children():
+                widget.destroy()
+
+            participantes = self.db.obtener_participantes_presupuesto(presup_id)
+
+            if not participantes:
+                tk.Label(
+                    lista_container,
+                    text="No hay participantes agregados",
+                    font=('Segoe UI', 10),
+                    bg=COLORES['background'],
+                    fg='gray'
+                ).pack(pady=20)
+            else:
+                for p in participantes:
+                    nombre = p[2]
+                    email = p[3]
+                    rol = p[4]
+
+                    frame_p = tk.Frame(lista_container, bg=COLORES['card_bg'], relief=tk.RAISED, bd=1)
+                    frame_p.pack(fill=tk.X, pady=3)
+
+                    tk.Label(
+                        frame_p,
+                        text=f"👤 {nombre}",
+                        font=('Segoe UI', 11, 'bold'),
+                        bg=COLORES['card_bg']
+                    ).pack(side=tk.LEFT, padx=10, pady=8)
+
+                    if email:
+                        tk.Label(
+                            frame_p,
+                            text=email,
+                            font=('Segoe UI', 9),
+                            bg=COLORES['card_bg'],
+                            fg='gray'
+                        ).pack(side=tk.LEFT, padx=5)
+
+                    # Rol badge
+                    rol_colors = {'viewer': '#6b7280', 'contributor': '#3b82f6', 'admin': '#10b981'}
+                    tk.Label(
+                        frame_p,
+                        text=rol.upper(),
+                        font=('Segoe UI', 8, 'bold'),
+                        bg=rol_colors.get(rol, '#6b7280'),
+                        fg='white',
+                        padx=8,
+                        pady=2
+                    ).pack(side=tk.RIGHT, padx=10)
+
+        actualizar_lista()
+
+        tk.Button(
+            frame,
+            text="✅ Cerrar",
+            command=v.destroy,
+            bg=COLORES['primary'],
+            fg='white',
+            font=('Segoe UI', 11, 'bold'),
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=30,
+            pady=10
+        ).pack(pady=10)
+
+    def mostrar_buddy_notificaciones(self):
+        """Centro de notificaciones estilo Buddy"""
+        # Header
+        frame_header = tk.Frame(self.frame_contenido, bg=COLORES['primary'], height=80)
+        frame_header.pack(fill=tk.X, padx=15, pady=15)
+        frame_header.pack_propagate(False)
+
+        notifs_no_leidas = self.db.obtener_notificaciones_buddy(solo_no_leidas=True)
+
+        tk.Label(
+            frame_header,
+            text=f"🔔 Notificaciones ({len(notifs_no_leidas)} nuevas)",
+            font=('Segoe UI', 18, 'bold'),
+            bg=COLORES['primary'],
+            fg='white'
+        ).pack(side=tk.LEFT, padx=20, pady=20)
+
+        def marcar_todas_leidas():
+            for notif in notifs_no_leidas:
+                self.db.marcar_notificacion_leida(notif[0])
+            self.mostrar_buddy_notificaciones()
+
+        if notifs_no_leidas:
+            tk.Button(
+                frame_header,
+                text="✅ Marcar Todas Leídas",
+                font=('Segoe UI', 10, 'bold'),
+                bg=COLORES['success'],
+                fg='white',
+                relief=tk.FLAT,
+                cursor='hand2',
+                command=marcar_todas_leidas,
+                padx=15,
+                pady=5
+            ).pack(side=tk.RIGHT, padx=20)
+
+        # Obtener todas las notificaciones
+        notifs = self.db.obtener_notificaciones_buddy()
+
+        if not notifs:
+            tk.Label(
+                self.frame_contenido,
+                text="🔔 No tenés notificaciones\n\nTe avisaremos cuando haya algo importante",
+                font=('Segoe UI', 12),
+                bg=COLORES['background'],
+                fg='gray',
+                justify=tk.CENTER
+            ).pack(expand=True)
+            return
+
+        # Frame con scroll
+        frame_scroll = tk.Frame(self.frame_contenido, bg=COLORES['background'])
+        frame_scroll.pack(fill=tk.BOTH, expand=True, padx=15, pady=10)
+
+        canvas = tk.Canvas(frame_scroll, bg=COLORES['background'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(frame_scroll, orient="vertical", command=canvas.yview)
+        frame_notifs = tk.Frame(canvas, bg=COLORES['background'])
+
+        frame_notifs.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=frame_notifs, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        for notif in notifs:
+            notif_id = notif[0]
+            tipo = notif[1]
+            titulo = notif[2]
+            mensaje = notif[3]
+            nivel = notif[6]
+            leida = notif[8]
+
+            # Determinar color según nivel
+            nivel_colors = {
+                'info': COLORES['info'],
+                'success': COLORES['success'],
+                'warning': COLORES['warning'],
+                'danger': COLORES['danger']
+            }
+            color = nivel_colors.get(nivel, COLORES['info'])
+
+            # Tarjeta de notificación
+            frame_notif = tk.Frame(
+                frame_notifs,
+                bg='#e5e7eb' if leida else COLORES['card_bg'],
+                relief=tk.RAISED,
+                bd=2
+            )
+            frame_notif.pack(fill=tk.X, pady=5)
+
+            # Barra lateral de color
+            frame_barra = tk.Frame(frame_notif, bg=color, width=5)
+            frame_barra.pack(side=tk.LEFT, fill=tk.Y)
+
+            # Contenido
+            frame_contenido_notif = tk.Frame(frame_notif, bg='#e5e7eb' if leida else COLORES['card_bg'])
+            frame_contenido_notif.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=15, pady=10)
+
+            tk.Label(
+                frame_contenido_notif,
+                text=titulo,
+                font=('Segoe UI', 11, 'bold'),
+                bg='#e5e7eb' if leida else COLORES['card_bg']
+            ).pack(anchor='w')
+
+            tk.Label(
+                frame_contenido_notif,
+                text=mensaje,
+                font=('Segoe UI', 10),
+                bg='#e5e7eb' if leida else COLORES['card_bg'],
+                wraplength=400,
+                justify=tk.LEFT
+            ).pack(anchor='w', pady=5)
+
+            # Botón marcar como leída
+            if not leida:
+                def marcar_leida(nid=notif_id):
+                    self.db.marcar_notificacion_leida(nid)
+                    self.mostrar_buddy_notificaciones()
+
+                tk.Button(
+                    frame_notif,
+                    text="✓",
+                    font=('Segoe UI', 12, 'bold'),
+                    bg=COLORES['success'],
+                    fg='white',
+                    relief=tk.FLAT,
+                    cursor='hand2',
+                    command=marcar_leida,
+                    width=3
+                ).pack(side=tk.RIGHT, padx=10)
+
+    def mostrar_temas(self):
+        """Selector de temas de colores estilo Buddy"""
+        # Header
+        frame_header = tk.Frame(self.frame_contenido, bg=COLORES['primary'], height=80)
+        frame_header.pack(fill=tk.X, padx=15, pady=15)
+        frame_header.pack_propagate(False)
+
+        tk.Label(
+            frame_header,
+            text="🎨 Temas de Colores",
+            font=('Segoe UI', 18, 'bold'),
+            bg=COLORES['primary'],
+            fg='white'
+        ).pack(padx=20, pady=20)
+
+        # Descripción
+        tk.Label(
+            self.frame_contenido,
+            text="Personalizá la apariencia de tu app con estos temas de colores",
+            font=('Segoe UI', 11),
+            bg=COLORES['background'],
+            fg='gray'
+        ).pack(pady=10)
+
+        # Obtener temas
+        temas = self.db.obtener_temas_disponibles()
+        tema_activo = self.db.obtener_tema_activo()
+        tema_activo_id = tema_activo[0] if tema_activo else None
+
+        # Grid de temas
+        frame_temas = tk.Frame(self.frame_contenido, bg=COLORES['background'])
+        frame_temas.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+
+        for i, tema in enumerate(temas):
+            tema_id = tema[0]
+            nombre = tema[1]
+            primary = tema[2]
+            success = tema[4]
+            danger = tema[5]
+            bg_color = tema[8]
+
+            # Tarjeta del tema
+            frame_tema = tk.Frame(
+                frame_temas,
+                bg=bg_color,
+                relief=tk.RAISED,
+                bd=4 if tema_id == tema_activo_id else 2,
+                highlightthickness=3 if tema_id == tema_activo_id else 0,
+                highlightbackground=COLORES['success'] if tema_id == tema_activo_id else bg_color
+            )
+            frame_tema.grid(row=i//2, column=i%2, padx=10, pady=10, sticky='nsew')
+
+            # Nombre del tema
+            tk.Label(
+                frame_tema,
+                text=nombre + (" ✓ ACTIVO" if tema_id == tema_activo_id else ""),
+                font=('Segoe UI', 14, 'bold'),
+                bg=bg_color,
+                fg=primary
+            ).pack(pady=15)
+
+            # Paleta de colores
+            frame_paleta = tk.Frame(frame_tema, bg=bg_color)
+            frame_paleta.pack(pady=10)
+
+            colores_muestra = [
+                (primary, "Primary"),
+                (success, "Success"),
+                (danger, "Danger")
+            ]
+
+            for color, label in colores_muestra:
+                frame_color = tk.Frame(frame_paleta, bg=color, width=60, height=40)
+                frame_color.pack(side=tk.LEFT, padx=5)
+                frame_color.pack_propagate(False)
+
+                tk.Label(
+                    frame_color,
+                    text=label,
+                    font=('Segoe UI', 7),
+                    bg=color,
+                    fg='white'
+                ).pack(expand=True)
+
+            # Botón activar
+            def activar(tid=tema_id, tnombre=nombre):
+                self.db.activar_tema(tid)
+                messagebox.showinfo("Tema Activado", f"✅ Tema '{tnombre}' activado!\n\nReiniciá la app para ver los cambios.")
+                self.mostrar_temas()
+
+            if tema_id != tema_activo_id:
+                tk.Button(
+                    frame_tema,
+                    text="Activar Tema",
+                    font=('Segoe UI', 10, 'bold'),
+                    bg=primary,
+                    fg='white',
+                    relief=tk.FLAT,
+                    cursor='hand2',
+                    command=activar,
+                    padx=20,
+                    pady=8
+                ).pack(pady=15)
+            else:
+                tk.Label(
+                    frame_tema,
+                    text="✓ En Uso",
+                    font=('Segoe UI', 10, 'bold'),
+                    bg=success,
+                    fg='white',
+                    padx=20,
+                    pady=8
+                ).pack(pady=15)
+
+        frame_temas.columnconfigure(0, weight=1)
+        frame_temas.columnconfigure(1, weight=1)
 
     def ventana_conversor(self):
         """Ventana de conversor de monedas múltiples"""
