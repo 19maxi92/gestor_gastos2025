@@ -2350,6 +2350,11 @@ class GestorGastos:
             ("🎮 Logros", 'logros', self.mostrar_logros),
         ]
 
+        # SECCIÓN: Ayuda
+        nav_buttons_ayuda = [
+            ("❓ Ayuda", 'ayuda', self.mostrar_ayuda),
+        ]
+
         self.nav_buttons = {}
 
         # Renderizar botones principales
@@ -2438,6 +2443,34 @@ class GestorGastos:
                 bg=COLORES['sidebar_bg'], fg=COLORES['text_light'], anchor='w', padx=20).pack(fill=tk.X, pady=(5,2))
 
         for text, vista, comando in nav_buttons_gamificacion:
+            btn = tk.Button(
+                sidebar,
+                text=text,
+                font=('Segoe UI', 10),
+                bg=COLORES['sidebar_bg'],
+                fg='white',
+                relief=tk.FLAT,
+                cursor='hand2',
+                anchor='w',
+                padx=20,
+                pady=10,
+                command=lambda v=vista, c=comando: self.cambiar_vista(v, c)
+            )
+            btn.pack(fill=tk.X, padx=5, pady=1)
+            btn.bind('<Enter>', lambda e, b=btn: b.config(bg=COLORES['sidebar_hover']))
+            btn.bind('<Leave>', lambda e, b=btn, v=vista: b.config(
+                bg=COLORES['primary'] if self.vista_actual == v else COLORES['sidebar_bg']
+            ))
+            self.nav_buttons[vista] = btn
+
+        # Separador
+        tk.Frame(sidebar, bg=COLORES['border'], height=1).pack(fill=tk.X, padx=10, pady=8)
+
+        # Label Ayuda
+        tk.Label(sidebar, text="AYUDA", font=('Segoe UI', 8, 'bold'),
+                bg=COLORES['sidebar_bg'], fg=COLORES['text_light'], anchor='w', padx=20).pack(fill=tk.X, pady=(5,2))
+
+        for text, vista, comando in nav_buttons_ayuda:
             btn = tk.Button(
                 sidebar,
                 text=text,
@@ -6740,6 +6773,9 @@ class GestorGastos:
             def activar(tid=tema_id, tnombre=nombre):
                 self.db.activar_tema(tid)
                 messagebox.showinfo("Tema Activado", f"✅ Tema '{tnombre}' activado!\n\nReiniciá la app para ver los cambios.")
+                # Limpiar y recargar la vista correctamente
+                for widget in self.frame_contenido.winfo_children():
+                    widget.destroy()
                 self.mostrar_temas()
 
             if tema_id != tema_activo_id:
@@ -7715,6 +7751,353 @@ class GestorGastos:
             messagebox.showinfo("Backup", f"✅ Backup creado:\n{archivo}")
         except Exception as e:
             messagebox.showerror("Error", f"Error: {e}")
+
+    def mostrar_ayuda(self):
+        """Sección de ayuda con explicaciones detalladas y ejemplos"""
+        # Header
+        frame_header = tk.Frame(self.frame_contenido, bg=COLORES['primary'], height=80)
+        frame_header.pack(fill=tk.X, padx=15, pady=15)
+        frame_header.pack_propagate(False)
+
+        tk.Label(
+            frame_header,
+            text="❓ Centro de Ayuda",
+            font=('Segoe UI', 18, 'bold'),
+            bg=COLORES['primary'],
+            fg='white'
+        ).pack(padx=20, pady=20)
+
+        # Frame principal con scroll
+        canvas = tk.Canvas(self.frame_contenido, bg=COLORES['background'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(self.frame_contenido, orient="vertical", command=canvas.yview)
+        frame_scroll = tk.Frame(canvas, bg=COLORES['background'])
+
+        frame_scroll.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=frame_scroll, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=20)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Secciones de ayuda
+        secciones_ayuda = [
+            {
+                "titulo": "📊 Dashboard",
+                "icono": "📊",
+                "descripcion": "Panel principal con resumen de tu actividad financiera",
+                "caracteristicas": [
+                    "Visualiza tu balance total actualizado",
+                    "Gráficos de gastos por categoría",
+                    "Estadísticas mensuales y tendencias",
+                    "Acceso rápido a todas las funciones"
+                ],
+                "ejemplo": "💡 Ejemplo: Si gastaste $50,000 este mes y tu sueldo es $100,000, verás tu balance restante de $50,000 destacado en el dashboard."
+            },
+            {
+                "titulo": "⚡ Entrada Rápida",
+                "icono": "⚡",
+                "descripcion": "Registra gastos e ingresos de forma ultra-rápida estilo Monefy",
+                "caracteristicas": [
+                    "Interfaz simplificada con teclado numérico",
+                    "Categorías predefinidas con emojis",
+                    "Registro en segundos sin complicaciones",
+                    "Perfecto para uso diario"
+                ],
+                "ejemplo": "💡 Ejemplo: Compraste café por $2,500 → Abrí Entrada Rápida → Tecleá 2500 → Tocá ☕ Café → ¡Listo!"
+            },
+            {
+                "titulo": "📋 Gastos",
+                "icono": "📋",
+                "descripcion": "Gestión completa de todos tus movimientos financieros",
+                "caracteristicas": [
+                    "Lista detallada de ingresos y gastos",
+                    "Filtros por fecha, categoría y tipo",
+                    "Editar o eliminar transacciones",
+                    "Exportar a CSV o Excel"
+                ],
+                "ejemplo": "💡 Ejemplo: Para ver todos los gastos de 'Supermercado' en enero, usá los filtros de categoría y fecha."
+            },
+            {
+                "titulo": "🔔 Alertas",
+                "icono": "🔔",
+                "descripcion": "Sistema inteligente de notificaciones proactivas",
+                "caracteristicas": [
+                    "Alertas cuando te acercás al límite de presupuesto",
+                    "Recordatorios de cuentas por pagar",
+                    "Notificaciones de metas cercanas a cumplirse",
+                    "Avisos de suscripciones próximas a vencer"
+                ],
+                "ejemplo": "💡 Ejemplo: Si configuraste un presupuesto de $80,000 para 'Entretenimiento' y ya gastaste $70,000, recibirás una alerta proactiva."
+            },
+            {
+                "titulo": "📅 Cuentas por Pagar",
+                "icono": "📅",
+                "descripcion": "Nunca olvides un pago importante",
+                "caracteristicas": [
+                    "Registra servicios, impuestos y facturas",
+                    "Establecé fechas de vencimiento",
+                    "Marca como pagado cuando abones",
+                    "Recibí recordatorios automáticos"
+                ],
+                "ejemplo": "💡 Ejemplo: Agregá 'Luz - $5,000 - Vence 15/11' → La app te recordará 3 días antes del vencimiento."
+            },
+            {
+                "titulo": "👥 Deudas Compartidas (Splitwise)",
+                "icono": "👥",
+                "descripcion": "Gestiona gastos compartidos con amigos y familia",
+                "caracteristicas": [
+                    "Crea grupos de gasto compartido",
+                    "Divide gastos equitativamente o por porcentaje",
+                    "Visualiza quién debe a quién",
+                    "Registra pagos y liquida cuentas"
+                ],
+                "ejemplo": "💡 Ejemplo: Viaje con 3 amigos → Creá grupo 'Viaje a Bariloche' → Registrá gasto de hotel $30,000 → La app calcula que cada uno debe $7,500."
+            },
+            {
+                "titulo": "🎯 Metas de Ahorro",
+                "icono": "🎯",
+                "descripcion": "Alcanza tus objetivos financieros",
+                "caracteristicas": [
+                    "Define metas con monto objetivo",
+                    "Establece fecha límite",
+                    "Aporta fondos progresivamente",
+                    "Visualiza tu progreso con barras animadas"
+                ],
+                "ejemplo": "💡 Ejemplo: Meta 'Notebook Nueva' - $500,000 - Para diciembre → Aporta $50,000 mensuales → Seguí tu progreso: 20%, 40%, 60%..."
+            },
+            {
+                "titulo": "💰 Ahorro Automático",
+                "icono": "💰",
+                "descripcion": "Reglas inteligentes para ahorrar sin esfuerzo",
+                "caracteristicas": [
+                    "Ahorro por redondeo (guarda el vuelto)",
+                    "Ahorro por porcentaje de ingresos",
+                    "Ahorro en fechas específicas",
+                    "Aporte automático a tus metas"
+                ],
+                "ejemplo": "💡 Ejemplo: Configurá 'Ahorrar 10% de cada ingreso' → Si cobras $100,000, automáticamente se destinan $10,000 a tu meta."
+            },
+            {
+                "titulo": "📺 Suscripciones",
+                "icono": "📺",
+                "descripcion": "Controla todos tus servicios recurrentes",
+                "caracteristicas": [
+                    "Registra Netflix, Spotify, gym, etc.",
+                    "Visualiza costo mensual y anual",
+                    "Recibí alertas de renovación",
+                    "Identifica suscripciones que no usás"
+                ],
+                "ejemplo": "💡 Ejemplo: Netflix $3,500/mes + Spotify $1,000/mes = $4,500/mes → Anual: $54,000. ¿Realmente usás ambas?"
+            },
+            {
+                "titulo": "💳 Tarjetas de Crédito",
+                "icono": "💳",
+                "descripcion": "Gestiona tus tarjetas y evita sorpresas",
+                "caracteristicas": [
+                    "Registra múltiples tarjetas con límites",
+                    "Visualiza saldo disponible",
+                    "Calcula interés de financiaciones",
+                    "Alerta cuando te acercás al límite"
+                ],
+                "ejemplo": "💡 Ejemplo: Visa con límite $200,000 → Ya gastaste $180,000 → Alerta: 'Solo quedan $20,000 disponibles'."
+            },
+            {
+                "titulo": "🔄 Gastos Recurrentes",
+                "icono": "🔄",
+                "descripcion": "Automatiza gastos que se repiten",
+                "caracteristicas": [
+                    "Define frecuencia: diaria, semanal, mensual",
+                    "La app registra automáticamente",
+                    "Edita o pausa recurrencias",
+                    "Ideal para alquileres, expensas, etc."
+                ],
+                "ejemplo": "💡 Ejemplo: Alquiler $50,000 cada día 10 → Se registra automáticamente sin que tengas que recordarlo."
+            },
+            {
+                "titulo": "📊 Presupuestos",
+                "icono": "📊",
+                "descripcion": "Establece límites de gasto por categoría",
+                "caracteristicas": [
+                    "Define presupuesto mensual por categoría",
+                    "Visualiza % consumido en tiempo real",
+                    "Recibí alertas al llegar al 80%",
+                    "Compara meses anteriores"
+                ],
+                "ejemplo": "💡 Ejemplo: Presupuesto 'Comida' $60,000 → Ya gastaste $48,000 (80%) → Alerta: 'Te quedan $12,000 para este mes'."
+            },
+            {
+                "titulo": "🤝 Buddy Presupuestos",
+                "icono": "🤝",
+                "descripcion": "Comparte presupuestos con pareja o familia",
+                "caracteristicas": [
+                    "Presupuestos colaborativos",
+                    "Cada miembro registra sus gastos",
+                    "Visualiza consumo grupal",
+                    "Notificaciones compartidas"
+                ],
+                "ejemplo": "💡 Ejemplo: Presupuesto compartido 'Hogar' $100,000 → Vos gastás $40,000 + Tu pareja $35,000 = $75,000 usado (75%)."
+            },
+            {
+                "titulo": "🏆 FinScore",
+                "icono": "🏆",
+                "descripcion": "Tu score de salud financiera gamificado",
+                "caracteristicas": [
+                    "Puntaje de 0 a 1000 según tus hábitos",
+                    "Factores: ahorro, deudas, presupuestos",
+                    "Consejos personalizados para mejorar",
+                    "Compara tu progreso mensual"
+                ],
+                "ejemplo": "💡 Ejemplo: FinScore 750 → 'Muy Bueno' → Mejora aportando más a metas y reduciendo gastos hormiga."
+            },
+            {
+                "titulo": "🎨 Temas",
+                "icono": "🎨",
+                "descripcion": "Personaliza la apariencia de tu app",
+                "caracteristicas": [
+                    "Múltiples temas de colores",
+                    "Modo claro y oscuro",
+                    "Paletas cuidadosamente diseñadas",
+                    "Cambia cuando quieras"
+                ],
+                "ejemplo": "💡 Ejemplo: ¿Te cansa el azul? Cambia a 'Sunset Vibes' con tonos naranjas y violetas."
+            },
+            {
+                "titulo": "🎮 Logros",
+                "icono": "🎮",
+                "descripcion": "Sistema de gamificación para motivarte",
+                "caracteristicas": [
+                    "Desbloquea logros por buenos hábitos",
+                    "Badges especiales y rarezas",
+                    "Progreso con barras visuales",
+                    "¡Colecciona todos los logros!"
+                ],
+                "ejemplo": "💡 Ejemplo: Logro desbloqueado: '💰 Ahorrador Novato' - Alcanzaste tu primera meta de ahorro de $10,000."
+            },
+            {
+                "titulo": "💱 Conversor",
+                "icono": "💱",
+                "descripcion": "Conversión de monedas en tiempo real",
+                "caracteristicas": [
+                    "Dólar oficial, blue, MEP, etc.",
+                    "Múltiples monedas internacionales",
+                    "Tasas actualizadas automáticamente",
+                    "Calcula en ambas direcciones"
+                ],
+                "ejemplo": "💡 Ejemplo: ¿Cuánto es USD 100 al blue? → El conversor te muestra: $107,500 (si blue = $1,075)."
+            },
+        ]
+
+        for seccion in secciones_ayuda:
+            # Frame de la sección
+            frame_seccion = tk.Frame(
+                frame_scroll,
+                bg=COLORES['card_bg'],
+                relief=tk.SOLID,
+                bd=1,
+                highlightbackground=COLORES['border'],
+                highlightthickness=1
+            )
+            frame_seccion.pack(fill=tk.X, padx=10, pady=10)
+
+            # Título de la sección
+            frame_titulo = tk.Frame(frame_seccion, bg=COLORES['primary'], height=50)
+            frame_titulo.pack(fill=tk.X)
+            frame_titulo.pack_propagate(False)
+
+            tk.Label(
+                frame_titulo,
+                text=seccion['titulo'],
+                font=('Segoe UI', 14, 'bold'),
+                bg=COLORES['primary'],
+                fg='white',
+                anchor='w'
+            ).pack(side=tk.LEFT, padx=15, pady=10)
+
+            # Descripción
+            tk.Label(
+                frame_seccion,
+                text=seccion['descripcion'],
+                font=('Segoe UI', 11),
+                bg=COLORES['card_bg'],
+                fg=COLORES['text_primary'],
+                wraplength=800,
+                justify=tk.LEFT,
+                anchor='w'
+            ).pack(fill=tk.X, padx=15, pady=(10, 5))
+
+            # Características
+            tk.Label(
+                frame_seccion,
+                text="✨ Características:",
+                font=('Segoe UI', 10, 'bold'),
+                bg=COLORES['card_bg'],
+                fg=COLORES['primary'],
+                anchor='w'
+            ).pack(fill=tk.X, padx=15, pady=(10, 5))
+
+            for caract in seccion['caracteristicas']:
+                tk.Label(
+                    frame_seccion,
+                    text=f"  • {caract}",
+                    font=('Segoe UI', 9),
+                    bg=COLORES['card_bg'],
+                    fg=COLORES['text_secondary'],
+                    wraplength=780,
+                    justify=tk.LEFT,
+                    anchor='w'
+                ).pack(fill=tk.X, padx=15, pady=2)
+
+            # Ejemplo
+            frame_ejemplo = tk.Frame(
+                frame_seccion,
+                bg='#FFF9E6',
+                relief=tk.SOLID,
+                bd=1,
+                highlightbackground='#FFD700',
+                highlightthickness=2
+            )
+            frame_ejemplo.pack(fill=tk.X, padx=15, pady=10)
+
+            tk.Label(
+                frame_ejemplo,
+                text=seccion['ejemplo'],
+                font=('Segoe UI', 10, 'italic'),
+                bg='#FFF9E6',
+                fg='#8B6914',
+                wraplength=760,
+                justify=tk.LEFT,
+                anchor='w'
+            ).pack(padx=10, pady=8)
+
+        # Footer con tips adicionales
+        frame_footer = tk.Frame(
+            frame_scroll,
+            bg=COLORES['success'],
+            relief=tk.SOLID,
+            bd=2
+        )
+        frame_footer.pack(fill=tk.X, padx=10, pady=20)
+
+        tk.Label(
+            frame_footer,
+            text="💡 Tip General: Usa el botón '⚡ ENTRADA RÁPIDA' para gastos del día a día, "
+                 "y '➕ Entrada Completa' cuando necesites agregar más detalles como notas, fotos o etiquetas.",
+            font=('Segoe UI', 10, 'bold'),
+            bg=COLORES['success'],
+            fg='white',
+            wraplength=780,
+            justify=tk.CENTER
+        ).pack(padx=20, pady=15)
+
+        # Bind scroll con rueda del mouse
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
 
     def mostrar_acerca_de(self):
         messagebox.showinfo(
