@@ -1904,30 +1904,71 @@ class GestorGastos:
         self.crear_tarjeta(frame_stats, "📊 Saldo", f"${sueldo - total_ars:,.0f}", 
                           COLORES['success'] if sueldo >= total_ars else COLORES['danger'])
         
-        # Gráfico
+        # Gráfico CIRCULAR GRANDE (estilo Monefy)
         if gastos:
             frame_grafico = tk.Frame(frame_scroll, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
             frame_grafico.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-            
+
             tk.Label(
                 frame_grafico,
-                text="📊 Gastos por Categoría",
-                font=('Segoe UI', 12, 'bold'),
+                text="📊 Distribución de Gastos - Vista Monefy",
+                font=('Segoe UI', 14, 'bold'),
                 bg=COLORES['card_bg']
-            ).pack(pady=10)
-            
+            ).pack(pady=15)
+
+            # Agrupar por categoría
             cats = {}
+            cat_icons = {}
             for g in gastos:
                 cats[g[2]] = cats.get(g[2], 0) + g[3]
-            
-            fig = Figure(figsize=(9, 4), facecolor=COLORES['card_bg'])
+
+            # Obtener iconos de categorías
+            todas_cats = self.db.obtener_categorias()
+            for cat in todas_cats:
+                cat_icons[cat[1]] = cat[2]  # nombre -> icono
+
+            # Crear figura MÁS GRANDE
+            fig = Figure(figsize=(10, 7), facecolor=COLORES['card_bg'])
             ax = fig.add_subplot(111)
-            ax.pie(cats.values(), labels=cats.keys(), autopct='%1.1f%%', startangle=90)
+
+            # Colores vibrantes estilo Monefy
+            colores_monefy = [
+                '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
+                '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B88B', '#ABEBC6'
+            ]
+
+            # Crear pie chart GRANDE con estilo
+            wedges, texts, autotexts = ax.pie(
+                cats.values(),
+                labels=[f"{cat_icons.get(cat, '')} {cat}" for cat in cats.keys()],
+                autopct='%1.1f%%',
+                startangle=90,
+                colors=colores_monefy[:len(cats)],
+                textprops={'fontsize': 11, 'weight': 'bold'},
+                pctdistance=0.85,
+                labeldistance=1.1
+            )
+
+            # Estilo de los textos
+            for text in texts:
+                text.set_color(COLORES['text'])
+                text.set_fontsize(12)
+
+            for autotext in autotexts:
+                autotext.set_color('white')
+                autotext.set_fontsize(11)
+                autotext.set_weight('bold')
+
             ax.axis('equal')
-            
+
+            # Agregar leyenda con montos
+            leyenda_labels = [f"{cat}: ${monto:,.0f}" for cat, monto in cats.items()]
+            ax.legend(leyenda_labels, loc='center left', bbox_to_anchor=(1, 0, 0.5, 1),
+                     fontsize=10, frameon=False)
+
             canvas_graf = FigureCanvasTkAgg(fig, frame_grafico)
             canvas_graf.draw()
-            canvas_graf.get_tk_widget().pack()
+            canvas_graf.get_tk_widget().pack(pady=10, padx=10)
 
     def crear_tarjeta(self, parent, titulo, valor, color):
         frame = tk.Frame(parent, bg=color, width=220, height=100)
