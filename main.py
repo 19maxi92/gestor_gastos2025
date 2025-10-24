@@ -573,6 +573,99 @@ class Database:
             )
         ''')
 
+        # Tablas inspiradas en Spendee/Splid/Tricount
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS carteras (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                tipo TEXT NOT NULL,
+                moneda TEXT DEFAULT 'ARS',
+                saldo_inicial REAL DEFAULT 0,
+                saldo_actual REAL DEFAULT 0,
+                color TEXT DEFAULT '#3b82f6',
+                icono TEXT DEFAULT '💳',
+                activa INTEGER DEFAULT 1,
+                fecha_creacion TEXT NOT NULL,
+                incluir_en_total INTEGER DEFAULT 1,
+                notas TEXT
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS transferencias_carteras (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cartera_origen_id INTEGER NOT NULL,
+                cartera_destino_id INTEGER NOT NULL,
+                monto REAL NOT NULL,
+                moneda TEXT DEFAULT 'ARS',
+                fecha TEXT NOT NULL,
+                descripcion TEXT,
+                categoria TEXT DEFAULT 'Transferencia',
+                FOREIGN KEY (cartera_origen_id) REFERENCES carteras(id),
+                FOREIGN KEY (cartera_destino_id) REFERENCES carteras(id)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS eventos_gastos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                tipo TEXT DEFAULT 'viaje',
+                fecha_inicio TEXT NOT NULL,
+                fecha_fin TEXT,
+                descripcion TEXT,
+                ubicacion TEXT,
+                presupuesto_total REAL,
+                moneda_principal TEXT DEFAULT 'ARS',
+                icono TEXT DEFAULT '✈️',
+                activo INTEGER DEFAULT 1,
+                creado_por TEXT,
+                fecha_creacion TEXT NOT NULL
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS gastos_evento (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                evento_id INTEGER NOT NULL,
+                gasto_splitwise_id INTEGER,
+                descripcion TEXT NOT NULL,
+                monto REAL NOT NULL,
+                moneda TEXT DEFAULT 'ARS',
+                categoria TEXT,
+                fecha TEXT NOT NULL,
+                pagado_por TEXT,
+                FOREIGN KEY (evento_id) REFERENCES eventos_gastos(id),
+                FOREIGN KEY (gasto_splitwise_id) REFERENCES gastos_splitwise(id)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS monedas_grupo (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                grupo_id INTEGER NOT NULL,
+                codigo_moneda TEXT NOT NULL,
+                tasa_cambio REAL DEFAULT 1.0,
+                moneda_base INTEGER DEFAULT 0,
+                fecha_actualizacion TEXT,
+                FOREIGN KEY (grupo_id) REFERENCES grupos_splitwise(id)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS estadisticas_grupo (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                grupo_id INTEGER NOT NULL,
+                participante TEXT NOT NULL,
+                total_gastado REAL DEFAULT 0,
+                total_pagado REAL DEFAULT 0,
+                gastos_registrados INTEGER DEFAULT 0,
+                categoria_mas_gasto TEXT,
+                fecha_calculo TEXT NOT NULL,
+                FOREIGN KEY (grupo_id) REFERENCES grupos_splitwise(id)
+            )
+        ''')
+
         self.conn.commit()
 
     def inicializar_datos(self):
@@ -632,6 +725,20 @@ class Database:
         cursor.execute('INSERT OR IGNORE INTO alertas_configuracion (tipo_alerta, umbral_porcentaje) VALUES (?, ?)', ('presupuesto_porcentaje', 80))
         cursor.execute('INSERT OR IGNORE INTO alertas_configuracion (tipo_alerta, umbral_porcentaje) VALUES (?, ?)', ('presupuesto_porcentaje', 90))
         cursor.execute('INSERT OR IGNORE INTO alertas_configuracion (tipo_alerta, umbral_porcentaje) VALUES (?, ?)', ('presupuesto_porcentaje', 100))
+
+        # Carteras por defecto (estilo Spendee)
+        carteras_default = [
+            ('Efectivo', 'cash', 'ARS', '#10b981', '💵'),
+            ('Cuenta Bancaria', 'bank', 'ARS', '#3b82f6', '🏦'),
+            ('Tarjeta de Crédito', 'credit_card', 'ARS', '#ef4444', '💳'),
+            ('Ahorros', 'savings', 'ARS', '#f59e0b', '🐷')
+        ]
+
+        for nombre, tipo, moneda, color, icono in carteras_default:
+            cursor.execute('''
+                INSERT OR IGNORE INTO carteras (nombre, tipo, moneda, color, icono, fecha_creacion)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (nombre, tipo, moneda, color, icono, datetime.date.today().isoformat()))
 
         self.conn.commit()
 
@@ -1806,6 +1913,193 @@ class Database:
         cursor.execute('SELECT * FROM temas_colores WHERE activo = 1 LIMIT 1')
         return cursor.fetchone()
 
+    # === SPENDEE - SISTEMA DE CARTERAS (WALLETS) ===
+    def crear_cartera(self, nombre, tipo, moneda='ARS', saldo_inicial=0, color='#3b82f6', icono='💳', notas=''):
+        """Crea una nueva cartera"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT INTO carteras (nombre, tipo, moneda, saldo_inicial, saldo_actual, color, icono, fecha_creacion, notas)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (nombre, tipo, moneda, saldo_inicial, saldo_inicial, color, icono, datetime.date.today().isoformat(), notas))
+        self.conn.commit()
+        return cursor.lastrowid
+
+    def obtener_carteras(self, activas_solo=True):
+        """Obtiene todas las carteras"""
+        cursor = self.conn.cursor()
+        if activas_solo:
+            cursor.execute('SELECT * FROM carteras WHERE activa = 1 ORDER BY nombre')
+        else:
+            cursor.execute('SELECT * FROM carteras ORDER BY nombre')
+        return cursor.fetchall()
+
+    def actualizar_saldo_cartera(self, cartera_id, nuevo_saldo):
+        """Actualiza el saldo de una cartera"""
+        cursor = self.conn.cursor()
+        cursor.execute('UPDATE carteras SET saldo_actual = ? WHERE id = ?', (nuevo_saldo, cartera_id))
+        self.conn.commit()
+
+    def transferir_entre_carteras(self, cartera_origen_id, cartera_destino_id, monto, descripcion=''):
+        """Realiza una transferencia entre carteras"""
+        cursor = self.conn.cursor()
+
+        # Obtener saldos actuales
+        cursor.execute('SELECT saldo_actual, moneda FROM carteras WHERE id = ?', (cartera_origen_id,))
+        origen = cursor.fetchone()
+        cursor.execute('SELECT saldo_actual, moneda FROM carteras WHERE id = ?', (cartera_destino_id,))
+        destino = cursor.fetchone()
+
+        if not origen or not destino:
+            return False
+
+        saldo_origen = origen[0]
+        moneda_origen = origen[1]
+
+        # Verificar fondos suficientes
+        if saldo_origen < monto:
+            return False
+
+        # Registrar transferencia
+        cursor.execute('''
+            INSERT INTO transferencias_carteras (cartera_origen_id, cartera_destino_id, monto, moneda, fecha, descripcion)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (cartera_origen_id, cartera_destino_id, monto, moneda_origen, datetime.date.today().isoformat(), descripcion))
+
+        # Actualizar saldos
+        cursor.execute('UPDATE carteras SET saldo_actual = saldo_actual - ? WHERE id = ?', (monto, cartera_origen_id))
+        cursor.execute('UPDATE carteras SET saldo_actual = saldo_actual + ? WHERE id = ?', (monto, cartera_destino_id))
+
+        self.conn.commit()
+        return True
+
+    def obtener_balance_total_carteras(self):
+        """Calcula el balance total de todas las carteras activas"""
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT SUM(saldo_actual) FROM carteras WHERE activa = 1 AND incluir_en_total = 1')
+        resultado = cursor.fetchone()
+        return resultado[0] if resultado and resultado[0] else 0
+
+    def obtener_transferencias_cartera(self, cartera_id, limite=50):
+        """Obtiene el historial de transferencias de una cartera"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT * FROM transferencias_carteras
+            WHERE cartera_origen_id = ? OR cartera_destino_id = ?
+            ORDER BY fecha DESC
+            LIMIT ?
+        ''', (cartera_id, cartera_id, limite))
+        return cursor.fetchall()
+
+    # === SPLID/TRICOUNT - EVENTOS Y VIAJES ===
+    def crear_evento(self, nombre, tipo, fecha_inicio, fecha_fin=None, descripcion='', ubicacion='', presupuesto=None, moneda='ARS', icono='✈️', creado_por=''):
+        """Crea un nuevo evento/viaje"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT INTO eventos_gastos (nombre, tipo, fecha_inicio, fecha_fin, descripcion, ubicacion,
+                                       presupuesto_total, moneda_principal, icono, creado_por, fecha_creacion)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (nombre, tipo, fecha_inicio, fecha_fin, descripcion, ubicacion, presupuesto, moneda, icono, creado_por, datetime.date.today().isoformat()))
+        self.conn.commit()
+        return cursor.lastrowid
+
+    def obtener_eventos(self, activos_solo=True):
+        """Obtiene todos los eventos"""
+        cursor = self.conn.cursor()
+        if activos_solo:
+            cursor.execute('SELECT * FROM eventos_gastos WHERE activo = 1 ORDER BY fecha_inicio DESC')
+        else:
+            cursor.execute('SELECT * FROM eventos_gastos ORDER BY fecha_inicio DESC')
+        return cursor.fetchall()
+
+    def agregar_gasto_evento(self, evento_id, descripcion, monto, moneda, categoria='', pagado_por='', gasto_splitwise_id=None):
+        """Agrega un gasto a un evento"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT INTO gastos_evento (evento_id, gasto_splitwise_id, descripcion, monto, moneda, categoria, fecha, pagado_por)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (evento_id, gasto_splitwise_id, descripcion, monto, moneda, categoria, datetime.date.today().isoformat(), pagado_por))
+        self.conn.commit()
+
+    def obtener_gastos_evento(self, evento_id):
+        """Obtiene todos los gastos de un evento"""
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT * FROM gastos_evento WHERE evento_id = ? ORDER BY fecha DESC', (evento_id,))
+        return cursor.fetchall()
+
+    def calcular_total_evento(self, evento_id):
+        """Calcula el total gastado en un evento"""
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT SUM(monto) FROM gastos_evento WHERE evento_id = ?', (evento_id,))
+        resultado = cursor.fetchone()
+        return resultado[0] if resultado and resultado[0] else 0
+
+    def calcular_estadisticas_grupo(self, grupo_id):
+        """Calcula estadísticas detalladas de un grupo"""
+        cursor = self.conn.cursor()
+        participantes = self.obtener_participantes_grupo(grupo_id)
+
+        stats = {}
+        for p in participantes:
+            nombre = p[2]
+
+            # Total pagado (gastos donde esta persona pagó)
+            cursor.execute('''
+                SELECT COALESCE(SUM(monto_total), 0) FROM gastos_splitwise
+                WHERE grupo_id = ? AND pagado_por = ?
+            ''', (grupo_id, nombre))
+            total_pagado = cursor.fetchone()[0]
+
+            # Total que debe (suma de sus divisiones)
+            cursor.execute('''
+                SELECT COALESCE(SUM(d.monto_debe), 0) FROM divisiones_splitwise d
+                JOIN gastos_splitwise g ON d.gasto_id = g.id
+                WHERE g.grupo_id = ? AND d.participante = ?
+            ''', (grupo_id, nombre))
+            total_debe = cursor.fetchone()[0]
+
+            # Número de gastos registrados
+            cursor.execute('''
+                SELECT COUNT(*) FROM gastos_splitwise
+                WHERE grupo_id = ? AND pagado_por = ?
+            ''', (grupo_id, nombre))
+            num_gastos = cursor.fetchone()[0]
+
+            # Categoría con más gasto
+            cursor.execute('''
+                SELECT categoria, SUM(monto_total) as total FROM gastos_splitwise
+                WHERE grupo_id = ? AND pagado_por = ?
+                GROUP BY categoria
+                ORDER BY total DESC
+                LIMIT 1
+            ''', (grupo_id, nombre))
+            cat_result = cursor.fetchone()
+            cat_mas_gasto = cat_result[0] if cat_result else 'N/A'
+
+            stats[nombre] = {
+                'total_pagado': total_pagado,
+                'total_debe': total_debe,
+                'gastos_registrados': num_gastos,
+                'categoria_mas_gasto': cat_mas_gasto,
+                'balance': total_pagado - total_debe
+            }
+
+        return stats
+
+    def agregar_moneda_grupo(self, grupo_id, codigo_moneda, tasa_cambio=1.0, es_base=False):
+        """Agrega soporte de moneda adicional a un grupo"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT INTO monedas_grupo (grupo_id, codigo_moneda, tasa_cambio, moneda_base, fecha_actualizacion)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (grupo_id, codigo_moneda, tasa_cambio, 1 if es_base else 0, datetime.date.today().isoformat()))
+        self.conn.commit()
+
+    def obtener_monedas_grupo(self, grupo_id):
+        """Obtiene todas las monedas configuradas para un grupo"""
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT * FROM monedas_grupo WHERE grupo_id = ?', (grupo_id,))
+        return cursor.fetchall()
+
     def cerrar(self):
         self.conn.close()
 
@@ -2220,6 +2514,8 @@ class GestorGastos:
             ("🤝 Buddy Presupuestos", 'buddy_presupuestos', self.mostrar_buddy_presupuestos),
             ("🔔 Notificaciones Buddy", 'buddy_notificaciones', self.mostrar_buddy_notificaciones),
             ("🎨 Temas", 'temas', self.mostrar_temas),
+            ("💰 Carteras", 'carteras', self.mostrar_carteras),
+            ("✈️ Eventos/Viajes", 'eventos', self.mostrar_eventos),
             ("🎮 Logros", 'logros', self.mostrar_logros),
             ("💱 Conversor", 'conversor', self.ventana_conversor),
         ]
@@ -6544,6 +6840,982 @@ class GestorGastos:
 
         frame_temas.columnconfigure(0, weight=1)
         frame_temas.columnconfigure(1, weight=1)
+
+    # === SPENDEE - CARTERAS (WALLETS) ===
+    def mostrar_carteras(self):
+        """Dashboard de carteras estilo Spendee"""
+        # Header
+        frame_header = tk.Frame(self.frame_contenido, bg=COLORES['primary'], height=80)
+        frame_header.pack(fill=tk.X, padx=15, pady=15)
+        frame_header.pack_propagate(False)
+
+        tk.Label(
+            frame_header,
+            text="💰 Mis Carteras",
+            font=('Segoe UI', 18, 'bold'),
+            bg=COLORES['primary'],
+            fg='white'
+        ).pack(side=tk.LEFT, padx=20, pady=20)
+
+        tk.Button(
+            frame_header,
+            text="➕ Nueva Cartera",
+            font=('Segoe UI', 11, 'bold'),
+            bg=COLORES['success'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=self.ventana_nueva_cartera,
+            padx=20,
+            pady=8
+        ).pack(side=tk.RIGHT, padx=20)
+
+        # Balance total
+        balance_total = self.db.obtener_balance_total_carteras()
+        frame_balance = tk.Frame(self.frame_contenido, bg=COLORES['success'], height=100)
+        frame_balance.pack(fill=tk.X, padx=15, pady=10)
+        frame_balance.pack_propagate(False)
+
+        tk.Label(
+            frame_balance,
+            text="💎 Balance Total",
+            font=('Segoe UI', 14),
+            bg=COLORES['success'],
+            fg='white'
+        ).pack(pady=10)
+
+        tk.Label(
+            frame_balance,
+            text=f"${balance_total:,.2f}",
+            font=('Segoe UI', 32, 'bold'),
+            bg=COLORES['success'],
+            fg='white'
+        ).pack()
+
+        # Carteras
+        carteras = self.db.obtener_carteras()
+
+        if not carteras:
+            tk.Label(
+                self.frame_contenido,
+                text="💰 No tenés carteras\n\nCreá una para organizar tu dinero",
+                font=('Segoe UI', 12),
+                bg=COLORES['background'],
+                fg='gray',
+                justify=tk.CENTER
+            ).pack(expand=True)
+            return
+
+        # Frame con scroll
+        frame_scroll = tk.Frame(self.frame_contenido, bg=COLORES['background'])
+        frame_scroll.pack(fill=tk.BOTH, expand=True, padx=15, pady=10)
+
+        canvas = tk.Canvas(frame_scroll, bg=COLORES['background'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(frame_scroll, orient="vertical", command=canvas.yview)
+        frame_carteras = tk.Frame(canvas, bg=COLORES['background'])
+
+        frame_carteras.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=frame_carteras, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        for cartera in carteras:
+            cartera_id = cartera[0]
+            nombre = cartera[1]
+            tipo = cartera[2]
+            moneda = cartera[3]
+            saldo = cartera[5]
+            color = cartera[6]
+            icono = cartera[7]
+
+            # Tarjeta de cartera
+            frame_cartera = tk.Frame(frame_carteras, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+            frame_cartera.pack(fill=tk.X, pady=8)
+
+            # Header con color de la cartera
+            frame_car_header = tk.Frame(frame_cartera, bg=color, height=10)
+            frame_car_header.pack(fill=tk.X)
+
+            # Contenido
+            frame_contenido_car = tk.Frame(frame_cartera, bg=COLORES['card_bg'])
+            frame_contenido_car.pack(fill=tk.X, padx=15, pady=15)
+
+            # Nombre e icono
+            tk.Label(
+                frame_contenido_car,
+                text=f"{icono} {nombre}",
+                font=('Segoe UI', 14, 'bold'),
+                bg=COLORES['card_bg']
+            ).pack(anchor='w')
+
+            # Tipo
+            tk.Label(
+                frame_contenido_car,
+                text=tipo.replace('_', ' ').title(),
+                font=('Segoe UI', 9),
+                bg=COLORES['card_bg'],
+                fg='gray'
+            ).pack(anchor='w', pady=2)
+
+            # Saldo
+            tk.Label(
+                frame_contenido_car,
+                text=f"${saldo:,.2f} {moneda}",
+                font=('Segoe UI', 24, 'bold'),
+                bg=COLORES['card_bg'],
+                fg=color
+            ).pack(anchor='w', pady=10)
+
+            # Botones
+            frame_btns = tk.Frame(frame_cartera, bg=COLORES['card_bg'])
+            frame_btns.pack(fill=tk.X, padx=15, pady=(0, 15))
+
+            tk.Button(
+                frame_btns,
+                text="💸 Transferir",
+                font=('Segoe UI', 9, 'bold'),
+                bg=COLORES['info'],
+                fg='white',
+                relief=tk.FLAT,
+                cursor='hand2',
+                command=lambda cid=cartera_id: self.ventana_transferir_cartera(cid),
+                padx=15,
+                pady=5
+            ).pack(side=tk.LEFT, padx=3)
+
+            tk.Button(
+                frame_btns,
+                text="💰 Ajustar Saldo",
+                font=('Segoe UI', 9, 'bold'),
+                bg=COLORES['warning'],
+                fg='white',
+                relief=tk.FLAT,
+                cursor='hand2',
+                command=lambda cid=cartera_id: self.ventana_ajustar_saldo_cartera(cid),
+                padx=15,
+                pady=5
+            ).pack(side=tk.LEFT, padx=3)
+
+    def ventana_nueva_cartera(self):
+        """Ventana para crear una nueva cartera"""
+        v = tk.Toplevel(self.root)
+        v.title("➕ Nueva Cartera")
+        v.geometry("450x500")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+        v.grab_set()
+
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (450 // 2)
+        y = (v.winfo_screenheight() // 2) - (500 // 2)
+        v.geometry(f'450x500+{x}+{y}')
+
+        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(
+            frame,
+            text="➕ Nueva Cartera",
+            font=('Segoe UI', 16, 'bold'),
+            bg=COLORES['background']
+        ).pack(pady=10)
+
+        # Formulario
+        tk.Label(frame, text="📝 Nombre:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        entry_nombre = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_nombre.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="💳 Tipo:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        tipos = ['cash', 'bank', 'credit_card', 'debit_card', 'savings', 'investment', 'other']
+        combo_tipo = ttk.Combobox(frame, values=tipos, state='readonly', font=('Segoe UI', 11))
+        combo_tipo.set('cash')
+        combo_tipo.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="💰 Saldo inicial:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        entry_saldo = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_saldo.insert(0, "0")
+        entry_saldo.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="💱 Moneda:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        combo_moneda = ttk.Combobox(frame, values=['ARS', 'USD', 'EUR'], state='readonly', font=('Segoe UI', 11))
+        combo_moneda.set('ARS')
+        combo_moneda.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="🎨 Color:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        colores = ['#3b82f6', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6']
+        var_color = tk.StringVar(value='#3b82f6')
+        frame_colores = tk.Frame(frame, bg=COLORES['background'])
+        frame_colores.pack(fill=tk.X, pady=5)
+        for color in colores:
+            tk.Radiobutton(frame_colores, bg=color, activebackground=color, selectcolor=color, variable=var_color, value=color, width=3).pack(side=tk.LEFT, padx=2)
+
+        tk.Label(frame, text="🎨 Icono:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        iconos = ['💵', '🏦', '💳', '💰', '🐷', '📊', '💎', '🪙']
+        combo_icono = ttk.Combobox(frame, values=iconos, state='readonly', font=('Segoe UI', 11))
+        combo_icono.set('💵')
+        combo_icono.pack(fill=tk.X, pady=3)
+
+        def guardar():
+            nombre = entry_nombre.get().strip()
+            saldo_str = entry_saldo.get().strip()
+
+            if not nombre:
+                messagebox.showwarning("Error", "Ingresá un nombre")
+                return
+
+            try:
+                saldo = float(saldo_str.replace(',', '.'))
+                self.db.crear_cartera(nombre, combo_tipo.get(), combo_moneda.get(), saldo, var_color.get(), combo_icono.get())
+                messagebox.showinfo("Éxito", f"✅ Cartera '{nombre}' creada!")
+                v.destroy()
+                self.mostrar_carteras()
+            except ValueError:
+                messagebox.showerror("Error", "Saldo inválido")
+
+        frame_btns = tk.Frame(frame, bg=COLORES['background'])
+        frame_btns.pack(pady=20)
+
+        tk.Button(
+            frame_btns,
+            text="✅ Crear",
+            command=guardar,
+            bg=COLORES['success'],
+            fg='white',
+            font=('Segoe UI', 11, 'bold'),
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=25,
+            pady=10
+        ).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(
+            frame_btns,
+            text="❌ Cancelar",
+            command=v.destroy,
+            bg=COLORES['danger'],
+            fg='white',
+            font=('Segoe UI', 10),
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=25,
+            pady=10
+        ).pack(side=tk.LEFT, padx=5)
+
+    def ventana_transferir_cartera(self, cartera_origen_id):
+        """Ventana para transferir entre carteras"""
+        v = tk.Toplevel(self.root)
+        v.title("💸 Transferir entre Carteras")
+        v.geometry("450x400")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+        v.grab_set()
+
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (450 // 2)
+        y = (v.winfo_screenheight() // 2) - (400 // 2)
+        v.geometry(f'450x400+{x}+{y}')
+
+        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(
+            frame,
+            text="💸 Transferir Fondos",
+            font=('Segoe UI', 16, 'bold'),
+            bg=COLORES['background']
+        ).pack(pady=10)
+
+        carteras = self.db.obtener_carteras()
+        nombres_carteras = {c[0]: f"{c[7]} {c[1]}" for c in carteras}
+
+        tk.Label(frame, text="📤 Desde:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        lbl_origen = tk.Label(frame, text=nombres_carteras.get(cartera_origen_id, ""), font=('Segoe UI', 12, 'bold'), bg=COLORES['background'], fg=COLORES['primary'])
+        lbl_origen.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="📥 Hacia:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        combo_destino = ttk.Combobox(frame, values=[v for k, v in nombres_carteras.items() if k != cartera_origen_id], state='readonly', font=('Segoe UI', 11))
+        if len(nombres_carteras) > 1:
+            combo_destino.current(0)
+        combo_destino.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="💰 Monto:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        entry_monto = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_monto.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="📋 Descripción (opcional):", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        entry_desc = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_desc.pack(fill=tk.X, pady=3)
+
+        def transferir():
+            monto_str = entry_monto.get().strip()
+            if not monto_str:
+                messagebox.showwarning("Error", "Ingresá un monto")
+                return
+
+            destino_nombre = combo_destino.get()
+            cartera_destino_id = None
+            for cid, cnombre in nombres_carteras.items():
+                if cnombre == destino_nombre:
+                    cartera_destino_id = cid
+                    break
+
+            if not cartera_destino_id:
+                messagebox.showerror("Error", "Seleccioná una cartera de destino")
+                return
+
+            try:
+                monto = float(monto_str.replace(',', '.'))
+                if monto <= 0:
+                    raise ValueError()
+
+                exito = self.db.transferir_entre_carteras(cartera_origen_id, cartera_destino_id, monto, entry_desc.get().strip())
+
+                if exito:
+                    messagebox.showinfo("Éxito", f"✅ Transferencia de ${monto:,.2f} realizada!")
+                    v.destroy()
+                    self.mostrar_carteras()
+                else:
+                    messagebox.showerror("Error", "Fondos insuficientes en la cartera origen")
+            except ValueError:
+                messagebox.showerror("Error", "Monto inválido")
+
+        frame_btns = tk.Frame(frame, bg=COLORES['background'])
+        frame_btns.pack(pady=20)
+
+        tk.Button(
+            frame_btns,
+            text="💸 Transferir",
+            command=transferir,
+            bg=COLORES['success'],
+            fg='white',
+            font=('Segoe UI', 11, 'bold'),
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=25,
+            pady=10
+        ).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(
+            frame_btns,
+            text="❌ Cancelar",
+            command=v.destroy,
+            bg=COLORES['danger'],
+            fg='white',
+            font=('Segoe UI', 10),
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=25,
+            pady=10
+        ).pack(side=tk.LEFT, padx=5)
+
+    def ventana_ajustar_saldo_cartera(self, cartera_id):
+        """Ventana para ajustar el saldo de una cartera"""
+        v = tk.Toplevel(self.root)
+        v.title("💰 Ajustar Saldo")
+        v.geometry("400x300")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+        v.grab_set()
+
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (400 // 2)
+        y = (v.winfo_screenheight() // 2) - (300 // 2)
+        v.geometry(f'400x300+{x}+{y}')
+
+        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(
+            frame,
+            text="💰 Ajustar Saldo",
+            font=('Segoe UI', 16, 'bold'),
+            bg=COLORES['background']
+        ).pack(pady=10)
+
+        tk.Label(frame, text="💵 Nuevo saldo:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        entry_saldo = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_saldo.pack(fill=tk.X, pady=3)
+
+        def ajustar():
+            saldo_str = entry_saldo.get().strip()
+            if not saldo_str:
+                messagebox.showwarning("Error", "Ingresá un saldo")
+                return
+
+            try:
+                saldo = float(saldo_str.replace(',', '.'))
+                self.db.actualizar_saldo_cartera(cartera_id, saldo)
+                messagebox.showinfo("Éxito", f"✅ Saldo actualizado a ${saldo:,.2f}")
+                v.destroy()
+                self.mostrar_carteras()
+            except ValueError:
+                messagebox.showerror("Error", "Saldo inválido")
+
+        frame_btns = tk.Frame(frame, bg=COLORES['background'])
+        frame_btns.pack(pady=20)
+
+        tk.Button(
+            frame_btns,
+            text="✅ Guardar",
+            command=ajustar,
+            bg=COLORES['success'],
+            fg='white',
+            font=('Segoe UI', 11, 'bold'),
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=25,
+            pady=10
+        ).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(
+            frame_btns,
+            text="❌ Cancelar",
+            command=v.destroy,
+            bg=COLORES['danger'],
+            fg='white',
+            font=('Segoe UI', 10),
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=25,
+            pady=10
+        ).pack(side=tk.LEFT, padx=5)
+
+    # === SPLID/TRICOUNT - EVENTOS Y VIAJES ===
+    def mostrar_eventos(self):
+        """Dashboard de eventos y viajes"""
+        # Header
+        frame_header = tk.Frame(self.frame_contenido, bg=COLORES['primary'], height=80)
+        frame_header.pack(fill=tk.X, padx=15, pady=15)
+        frame_header.pack_propagate(False)
+
+        tk.Label(
+            frame_header,
+            text="✈️ Eventos y Viajes",
+            font=('Segoe UI', 18, 'bold'),
+            bg=COLORES['primary'],
+            fg='white'
+        ).pack(side=tk.LEFT, padx=20, pady=20)
+
+        tk.Button(
+            frame_header,
+            text="➕ Nuevo Evento",
+            font=('Segoe UI', 11, 'bold'),
+            bg=COLORES['success'],
+            fg='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=self.ventana_nuevo_evento,
+            padx=20,
+            pady=8
+        ).pack(side=tk.RIGHT, padx=20)
+
+        # Eventos
+        eventos = self.db.obtener_eventos()
+
+        if not eventos:
+            tk.Label(
+                self.frame_contenido,
+                text="✈️ No tenés eventos creados\n\nCreá uno para organizar gastos de viajes o eventos grupales",
+                font=('Segoe UI', 12),
+                bg=COLORES['background'],
+                fg='gray',
+                justify=tk.CENTER
+            ).pack(expand=True)
+            return
+
+        # Frame con scroll
+        frame_scroll = tk.Frame(self.frame_contenido, bg=COLORES['background'])
+        frame_scroll.pack(fill=tk.BOTH, expand=True, padx=15, pady=10)
+
+        canvas = tk.Canvas(frame_scroll, bg=COLORES['background'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(frame_scroll, orient="vertical", command=canvas.yview)
+        frame_eventos = tk.Frame(canvas, bg=COLORES['background'])
+
+        frame_eventos.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=frame_eventos, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        for evento in eventos:
+            evento_id = evento[0]
+            nombre = evento[1]
+            tipo = evento[2]
+            fecha_inicio = evento[3]
+            fecha_fin = evento[4]
+            ubicacion = evento[6]
+            presupuesto = evento[7]
+            icono = evento[9] if len(evento) > 9 else '✈️'
+
+            # Calcular total gastado
+            total_gastado = self.db.calcular_total_evento(evento_id)
+
+            # Tarjeta del evento
+            frame_evento = tk.Frame(frame_eventos, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+            frame_evento.pack(fill=tk.X, pady=8)
+
+            # Header
+            frame_ev_header = tk.Frame(frame_evento, bg=COLORES['info'])
+            frame_ev_header.pack(fill=tk.X)
+
+            tk.Label(
+                frame_ev_header,
+                text=f"{icono} {nombre}",
+                font=('Segoe UI', 14, 'bold'),
+                bg=COLORES['info'],
+                fg='white'
+            ).pack(side=tk.LEFT, padx=15, pady=10)
+
+            tk.Label(
+                frame_ev_header,
+                text=tipo.upper(),
+                font=('Segoe UI', 8, 'bold'),
+                bg='white',
+                fg=COLORES['info'],
+                padx=8,
+                pady=2
+            ).pack(side=tk.RIGHT, padx=15)
+
+            # Detalles
+            frame_detalles = tk.Frame(frame_evento, bg=COLORES['card_bg'])
+            frame_detalles.pack(fill=tk.X, padx=15, pady=10)
+
+            if ubicacion:
+                tk.Label(
+                    frame_detalles,
+                    text=f"📍 {ubicacion}",
+                    font=('Segoe UI', 10),
+                    bg=COLORES['card_bg']
+                ).pack(anchor='w', pady=2)
+
+            fecha_texto = f"📅 {fecha_inicio}"
+            if fecha_fin:
+                fecha_texto += f" → {fecha_fin}"
+            tk.Label(
+                frame_detalles,
+                text=fecha_texto,
+                font=('Segoe UI', 10),
+                bg=COLORES['card_bg'],
+                fg='gray'
+            ).pack(anchor='w', pady=2)
+
+            # Presupuesto vs Gastado
+            if presupuesto:
+                porcentaje = (total_gastado / presupuesto * 100) if presupuesto > 0 else 0
+                color_presup = COLORES['danger'] if porcentaje > 100 else COLORES['warning'] if porcentaje > 80 else COLORES['success']
+
+                tk.Label(
+                    frame_detalles,
+                    text=f"💰 ${total_gastado:,.0f} / ${presupuesto:,.0f} ({porcentaje:.0f}%)",
+                    font=('Segoe UI', 11, 'bold'),
+                    bg=COLORES['card_bg'],
+                    fg=color_presup
+                ).pack(anchor='w', pady=5)
+            else:
+                tk.Label(
+                    frame_detalles,
+                    text=f"💰 Total gastado: ${total_gastado:,.0f}",
+                    font=('Segoe UI', 11, 'bold'),
+                    bg=COLORES['card_bg'],
+                    fg=COLORES['primary']
+                ).pack(anchor='w', pady=5)
+
+            # Botones
+            frame_btns = tk.Frame(frame_evento, bg=COLORES['card_bg'])
+            frame_btns.pack(fill=tk.X, padx=15, pady=(0, 15))
+
+            tk.Button(
+                frame_btns,
+                text="➕ Agregar Gasto",
+                font=('Segoe UI', 9, 'bold'),
+                bg=COLORES['success'],
+                fg='white',
+                relief=tk.FLAT,
+                cursor='hand2',
+                command=lambda eid=evento_id: self.ventana_agregar_gasto_evento(eid),
+                padx=15,
+                pady=5
+            ).pack(side=tk.LEFT, padx=3)
+
+            tk.Button(
+                frame_btns,
+                text="📋 Ver Gastos",
+                font=('Segoe UI', 9, 'bold'),
+                bg=COLORES['info'],
+                fg='white',
+                relief=tk.FLAT,
+                cursor='hand2',
+                command=lambda eid=evento_id: self.ventana_ver_gastos_evento(eid),
+                padx=15,
+                pady=5
+            ).pack(side=tk.LEFT, padx=3)
+
+    def ventana_nuevo_evento(self):
+        """Ventana para crear un nuevo evento/viaje"""
+        v = tk.Toplevel(self.root)
+        v.title("➕ Nuevo Evento")
+        v.geometry("500x600")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+        v.grab_set()
+
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (500 // 2)
+        y = (v.winfo_screenheight() // 2) - (600 // 2)
+        v.geometry(f'500x600+{x}+{y}')
+
+        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(
+            frame,
+            text="➕ Nuevo Evento/Viaje",
+            font=('Segoe UI', 16, 'bold'),
+            bg=COLORES['background']
+        ).pack(pady=10)
+
+        # Formulario
+        tk.Label(frame, text="📝 Nombre:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        entry_nombre = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_nombre.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="🎯 Tipo:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        tipos = ['viaje', 'evento', 'cumpleaños', 'boda', 'vacaciones', 'otro']
+        combo_tipo = ttk.Combobox(frame, values=tipos, state='readonly', font=('Segoe UI', 11))
+        combo_tipo.set('viaje')
+        combo_tipo.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="📅 Fecha inicio (YYYY-MM-DD):", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        entry_inicio = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_inicio.insert(0, datetime.date.today().isoformat())
+        entry_inicio.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="📅 Fecha fin (opcional):", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        entry_fin = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_fin.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="📍 Ubicación:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        entry_ubicacion = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_ubicacion.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="💰 Presupuesto total (opcional):", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        entry_presupuesto = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_presupuesto.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="🎨 Icono:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        iconos = ['✈️', '🏖️', '🎉', '🎂', '💍', '🏔️', '🏝️', '🎊']
+        combo_icono = ttk.Combobox(frame, values=iconos, state='readonly', font=('Segoe UI', 11))
+        combo_icono.set('✈️')
+        combo_icono.pack(fill=tk.X, pady=3)
+
+        def guardar():
+            nombre = entry_nombre.get().strip()
+            fecha_inicio = entry_inicio.get().strip()
+
+            if not nombre or not fecha_inicio:
+                messagebox.showwarning("Error", "Completá nombre y fecha de inicio")
+                return
+
+            fecha_fin = entry_fin.get().strip() if entry_fin.get().strip() else None
+            presupuesto_str = entry_presupuesto.get().strip()
+            presupuesto = None
+
+            if presupuesto_str:
+                try:
+                    presupuesto = float(presupuesto_str.replace(',', '.'))
+                except ValueError:
+                    messagebox.showerror("Error", "Presupuesto inválido")
+                    return
+
+            self.db.crear_evento(
+                nombre,
+                combo_tipo.get(),
+                fecha_inicio,
+                fecha_fin,
+                '',
+                entry_ubicacion.get().strip(),
+                presupuesto,
+                'ARS',
+                combo_icono.get()
+            )
+
+            messagebox.showinfo("Éxito", f"✅ Evento '{nombre}' creado!")
+            v.destroy()
+            self.mostrar_eventos()
+
+        frame_btns = tk.Frame(frame, bg=COLORES['background'])
+        frame_btns.pack(pady=20)
+
+        tk.Button(
+            frame_btns,
+            text="✅ Crear",
+            command=guardar,
+            bg=COLORES['success'],
+            fg='white',
+            font=('Segoe UI', 11, 'bold'),
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=25,
+            pady=10
+        ).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(
+            frame_btns,
+            text="❌ Cancelar",
+            command=v.destroy,
+            bg=COLORES['danger'],
+            fg='white',
+            font=('Segoe UI', 10),
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=25,
+            pady=10
+        ).pack(side=tk.LEFT, padx=5)
+
+    def ventana_agregar_gasto_evento(self, evento_id):
+        """Agregar un gasto a un evento"""
+        v = tk.Toplevel(self.root)
+        v.title("➕ Agregar Gasto al Evento")
+        v.geometry("450x450")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+        v.grab_set()
+
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (450 // 2)
+        y = (v.winfo_screenheight() // 2) - (450 // 2)
+        v.geometry(f'450x450+{x}+{y}')
+
+        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(
+            frame,
+            text="➕ Agregar Gasto",
+            font=('Segoe UI', 16, 'bold'),
+            bg=COLORES['background']
+        ).pack(pady=10)
+
+        # Formulario
+        tk.Label(frame, text="📝 Descripción:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        entry_desc = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_desc.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="💰 Monto:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        entry_monto = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_monto.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="💱 Moneda:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        combo_moneda = ttk.Combobox(frame, values=['ARS', 'USD', 'EUR'], state='readonly', font=('Segoe UI', 11))
+        combo_moneda.set('ARS')
+        combo_moneda.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="📂 Categoría:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        categorias = [c[1] for c in self.db.obtener_categorias()]
+        combo_cat = ttk.Combobox(frame, values=categorias, state='readonly', font=('Segoe UI', 11))
+        if categorias:
+            combo_cat.current(0)
+        combo_cat.pack(fill=tk.X, pady=3)
+
+        tk.Label(frame, text="👤 Pagado por:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        entry_pagador = tk.Entry(frame, font=('Segoe UI', 11))
+        entry_pagador.pack(fill=tk.X, pady=3)
+
+        def guardar():
+            descripcion = entry_desc.get().strip()
+            monto_str = entry_monto.get().strip()
+
+            if not descripcion or not monto_str:
+                messagebox.showwarning("Error", "Completá descripción y monto")
+                return
+
+            try:
+                monto = float(monto_str.replace(',', '.'))
+                if monto <= 0:
+                    raise ValueError()
+
+                self.db.agregar_gasto_evento(
+                    evento_id,
+                    descripcion,
+                    monto,
+                    combo_moneda.get(),
+                    combo_cat.get(),
+                    entry_pagador.get().strip()
+                )
+
+                messagebox.showinfo("Éxito", f"✅ Gasto agregado: ${monto:,.2f}")
+                v.destroy()
+                self.mostrar_eventos()
+            except ValueError:
+                messagebox.showerror("Error", "Monto inválido")
+
+        frame_btns = tk.Frame(frame, bg=COLORES['background'])
+        frame_btns.pack(pady=20)
+
+        tk.Button(
+            frame_btns,
+            text="✅ Guardar",
+            command=guardar,
+            bg=COLORES['success'],
+            fg='white',
+            font=('Segoe UI', 11, 'bold'),
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=25,
+            pady=10
+        ).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(
+            frame_btns,
+            text="❌ Cancelar",
+            command=v.destroy,
+            bg=COLORES['danger'],
+            fg='white',
+            font=('Segoe UI', 10),
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=25,
+            pady=10
+        ).pack(side=tk.LEFT, padx=5)
+
+    def ventana_ver_gastos_evento(self, evento_id):
+        """Ver todos los gastos de un evento"""
+        v = tk.Toplevel(self.root)
+        v.title("📋 Gastos del Evento")
+        v.geometry("650x550")
+        v.configure(bg=COLORES['background'])
+        v.transient(self.root)
+
+        v.update_idletasks()
+        x = (v.winfo_screenwidth() // 2) - (650 // 2)
+        y = (v.winfo_screenheight() // 2) - (550 // 2)
+        v.geometry(f'650x550+{x}+{y}')
+
+        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(
+            frame,
+            text="📋 Gastos del Evento",
+            font=('Segoe UI', 16, 'bold'),
+            bg=COLORES['background']
+        ).pack(pady=10)
+
+        # Total
+        total = self.db.calcular_total_evento(evento_id)
+        tk.Label(
+            frame,
+            text=f"💰 Total gastado: ${total:,.2f}",
+            font=('Segoe UI', 14, 'bold'),
+            bg=COLORES['background'],
+            fg=COLORES['success']
+        ).pack(pady=10)
+
+        # Gastos
+        gastos = self.db.obtener_gastos_evento(evento_id)
+
+        if not gastos:
+            tk.Label(
+                frame,
+                text="No hay gastos registrados",
+                font=('Segoe UI', 11),
+                bg=COLORES['background'],
+                fg='gray'
+            ).pack(expand=True, pady=50)
+        else:
+            # Frame con scroll
+            frame_scroll = tk.Frame(frame, bg=COLORES['background'])
+            frame_scroll.pack(fill=tk.BOTH, expand=True)
+
+            canvas = tk.Canvas(frame_scroll, bg=COLORES['background'], highlightthickness=0)
+            scrollbar = tk.Scrollbar(frame_scroll, orient="vertical", command=canvas.yview)
+            frame_gastos = tk.Frame(canvas, bg=COLORES['background'])
+
+            frame_gastos.bind(
+                "<Configure>",
+                lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+            )
+
+            canvas.create_window((0, 0), window=frame_gastos, anchor="nw")
+            canvas.configure(yscrollcommand=scrollbar.set)
+
+            canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+            for gasto in gastos:
+                descripcion = gasto[3]
+                monto = gasto[4]
+                moneda = gasto[5]
+                categoria = gasto[6] if gasto[6] else ''
+                fecha = gasto[7]
+                pagado_por = gasto[8] if gasto[8] else ''
+
+                frame_g = tk.Frame(frame_gastos, bg=COLORES['card_bg'], relief=tk.RAISED, bd=1)
+                frame_g.pack(fill=tk.X, pady=3)
+
+                # Título y monto
+                frame_g_header = tk.Frame(frame_g, bg=COLORES['card_bg'])
+                frame_g_header.pack(fill=tk.X, padx=10, pady=8)
+
+                tk.Label(
+                    frame_g_header,
+                    text=descripcion,
+                    font=('Segoe UI', 11, 'bold'),
+                    bg=COLORES['card_bg']
+                ).pack(side=tk.LEFT)
+
+                tk.Label(
+                    frame_g_header,
+                    text=f"${monto:,.2f} {moneda}",
+                    font=('Segoe UI', 11, 'bold'),
+                    bg=COLORES['card_bg'],
+                    fg=COLORES['success']
+                ).pack(side=tk.RIGHT)
+
+                # Detalles
+                if categoria or pagado_por or fecha:
+                    frame_detalles = tk.Frame(frame_g, bg=COLORES['card_bg'])
+                    frame_detalles.pack(fill=tk.X, padx=10, pady=(0, 8))
+
+                    detalles_text = []
+                    if fecha:
+                        detalles_text.append(f"📅 {fecha}")
+                    if categoria:
+                        detalles_text.append(f"📂 {categoria}")
+                    if pagado_por:
+                        detalles_text.append(f"💳 Pagado por {pagado_por}")
+
+                    tk.Label(
+                        frame_detalles,
+                        text=" • ".join(detalles_text),
+                        font=('Segoe UI', 9),
+                        bg=COLORES['card_bg'],
+                        fg='gray'
+                    ).pack(anchor='w')
+
+        tk.Button(
+            frame,
+            text="✅ Cerrar",
+            command=v.destroy,
+            bg=COLORES['primary'],
+            fg='white',
+            font=('Segoe UI', 11, 'bold'),
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=30,
+            pady=10
+        ).pack(pady=10)
 
     def ventana_conversor(self):
         """Ventana de conversor de monedas múltiples"""
