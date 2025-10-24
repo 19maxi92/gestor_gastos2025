@@ -71,25 +71,36 @@ for ruta in [RUTA_DATA, RUTA_BACKUPS]:
 print(f"📁 Guardando datos en: {RUTA_BASE}")
 print(f"🗄️ Base de datos: {RUTA_DB}")
 
-# === COLORES MODERNOS ===
+# === COLORES MODERNOS (Inspirados en Material Design 3 y Tailwind) ===
 COLORES = {
-    'primary': '#6366f1',  # Indigo moderno
-    'primary_dark': '#4f46e5',
-    'secondary': '#8b5cf6',  # Purple
-    'success': '#10b981',  # Green
+    'primary': '#7c3aed',  # Violet vibrante
+    'primary_dark': '#6d28d9',
+    'primary_light': '#a78bfa',
+    'secondary': '#06b6d4',  # Cyan brillante
+    'secondary_dark': '#0891b2',
+    'success': '#22c55e',  # Green más brillante
+    'success_dark': '#16a34a',
     'danger': '#ef4444',  # Red
+    'danger_dark': '#dc2626',
     'warning': '#f59e0b',  # Amber
-    'info': '#06b6d4',  # Cyan
-    'light': '#f9fafb',
-    'dark': '#1f2937',
-    'background': '#f3f4f6',  # Gray-100
+    'warning_dark': '#d97706',
+    'info': '#3b82f6',  # Blue
+    'info_dark': '#2563eb',
+    'light': '#fafafa',
+    'dark': '#18181b',
+    'background': '#f5f5f5',  # Fondo suave
     'card_bg': '#ffffff',
-    'sidebar_bg': '#1f2937',  # Dark sidebar
-    'sidebar_hover': '#374151',
-    'text': '#111827',
-    'text_secondary': '#6b7280',
-    'border': '#e5e7eb',
+    'card_shadow': '#e4e4e7',  # Para simular sombras
+    'sidebar_bg': '#18181b',  # Dark sidebar más profundo
+    'sidebar_hover': '#27272a',
+    'sidebar_active': '#3f3f46',
+    'text': '#09090b',
+    'text_secondary': '#71717a',
+    'text_light': '#a1a1aa',
+    'border': '#e4e4e7',
+    'border_dark': '#d4d4d8',
     'accent': '#ec4899',  # Pink accent
+    'accent_dark': '#db2777',
 }
 
 # === DATOS DEFAULT ===
@@ -1195,7 +1206,8 @@ class Database:
             AND monto < 0
         ''', (fecha_str, fecha_str))
 
-        ingreso = cursor.fetchone()[0]
+        resultado = cursor.fetchone()
+        ingreso = resultado[0] if resultado else None
         return ingreso and abs(ingreso) > 10000  # Umbral configurable
 
     def aplicar_ahorro_payday(self, regla_id, modo='moderado'):
@@ -1239,7 +1251,8 @@ class Database:
 
         # Si hay meta destino, actualizar
         cursor.execute('SELECT meta_destino_id FROM reglas_ahorro_auto WHERE id=?', (regla_id,))
-        meta_id = cursor.fetchone()[0]
+        resultado = cursor.fetchone()
+        meta_id = resultado[0] if resultado else None
 
         if meta_id:
             cursor.execute('''
@@ -2049,11 +2062,87 @@ def obtener_tasas_conversion():
         }
 
 
+# === FUNCIONES HELPER PARA UI MODERNA ===
+def crear_boton_moderno(parent, texto, comando, color='primary', ancho_completo=False, **kwargs):
+    """Crea un botón con estilo moderno y consistente"""
+    # Configuración de colores según el tipo
+    colores_btn = {
+        'primary': (COLORES['primary'], COLORES['primary_dark'], 'white'),
+        'secondary': (COLORES['secondary'], COLORES['secondary_dark'], 'white'),
+        'success': (COLORES['success'], COLORES['success_dark'], 'white'),
+        'danger': (COLORES['danger'], COLORES['danger_dark'], 'white'),
+        'warning': (COLORES['warning'], COLORES['warning_dark'], 'white'),
+        'info': (COLORES['info'], COLORES['info_dark'], 'white'),
+    }
+
+    bg_color, hover_color, fg_color = colores_btn.get(color, colores_btn['primary'])
+
+    # Configuración por defecto
+    config = {
+        'bg': bg_color,
+        'fg': fg_color,
+        'relief': tk.FLAT,
+        'cursor': 'hand2',
+        'font': ('Segoe UI', 10, 'bold'),
+        'activebackground': hover_color,
+        'activeforeground': fg_color,
+        'borderwidth': 0,
+        'padx': 20,
+        'pady': 10,
+    }
+
+    # Sobrescribir con kwargs personalizados
+    config.update(kwargs)
+
+    btn = tk.Button(parent, text=texto, command=comando, **config)
+
+    # Efectos hover
+    def on_enter(e):
+        btn['bg'] = hover_color
+
+    def on_leave(e):
+        btn['bg'] = bg_color
+
+    btn.bind("<Enter>", on_enter)
+    btn.bind("<Leave>", on_leave)
+
+    if ancho_completo:
+        btn.pack(fill=tk.X, padx=15, pady=5)
+
+    return btn
+
+def crear_card(parent, **kwargs):
+    """Crea un frame con estilo de tarjeta moderna"""
+    config = {
+        'bg': COLORES['card_bg'],
+        'relief': tk.SOLID,
+        'borderwidth': 1,
+        'highlightbackground': COLORES['border'],
+        'highlightthickness': 1,
+    }
+    config.update(kwargs)
+
+    frame = tk.Frame(parent, **config)
+    return frame
+
+def crear_label_titulo(parent, texto, tamaño=14, **kwargs):
+    """Crea un label con estilo de título"""
+    config = {
+        'bg': COLORES['card_bg'],
+        'fg': COLORES['text'],
+        'font': ('Segoe UI', tamaño, 'bold'),
+    }
+    config.update(kwargs)
+
+    label = tk.Label(parent, text=texto, **config)
+    return label
+
+
 # === APLICACIÓN PRINCIPAL ===
 class GestorGastos:
     def __init__(self, root):
         self.root = root
-        self.root.title("💰 Gestor de Gastos Personal v4.0 - Edición Mejorada")
+        self.root.title("💰 Gestor de Gastos Personal v7.5 - UI Moderna")
         self.root.geometry("1400x800")
         self.root.configure(bg=COLORES['background'])
 
@@ -2348,8 +2437,9 @@ class GestorGastos:
         entry_monto.pack(fill=tk.X, pady=5, ipady=5)
 
         # Frame de resultados
-        frame_resultados = tk.Frame(frame, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
-        frame_resultados.pack(fill=tk.BOTH, expand=True, pady=15)
+        frame_resultados = tk.Frame(frame, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1,
+                                   highlightbackground=COLORES['border'], highlightthickness=1)
+        frame_resultados.pack(fill=tk.BOTH, expand=True, pady=15, padx=2)
 
         tk.Label(
             frame_resultados,
@@ -2440,7 +2530,8 @@ class GestorGastos:
         scrollbar.pack(side="right", fill="y")
         
         # Resumen
-        frame_resumen = tk.Frame(frame_scroll, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+        frame_resumen = tk.Frame(frame_scroll, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1,
+                                highlightbackground=COLORES['border'], highlightthickness=1)
         frame_resumen.pack(fill=tk.X, padx=10, pady=10)
         
         tk.Label(
@@ -2467,7 +2558,8 @@ class GestorGastos:
         
         # Gráfico CIRCULAR GRANDE (estilo Monefy)
         if gastos:
-            frame_grafico = tk.Frame(frame_scroll, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+            frame_grafico = tk.Frame(frame_scroll, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1,
+                                    highlightbackground=COLORES['border'], highlightthickness=1)
             frame_grafico.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
             tk.Label(
@@ -2486,7 +2578,7 @@ class GestorGastos:
             # Obtener iconos de categorías
             todas_cats = self.db.obtener_categorias()
             for cat in todas_cats:
-                cat_icons[cat[1]] = cat[2]  # nombre -> icono
+                cat_icons[cat[1]] = cat[3] if len(cat) > 3 else '❓'  # nombre -> icono
 
             # Crear figura MÁS GRANDE
             fig = Figure(figsize=(10, 7), facecolor=COLORES['card_bg'])
@@ -2670,8 +2762,9 @@ class GestorGastos:
         fecha_obj, moneda, icono = meta[5], meta[6], meta[7]
         
         pct = (actual / objetivo * 100) if objetivo > 0 else 0
-        
-        frame = tk.Frame(self.frame_metas, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+
+        frame = tk.Frame(self.frame_metas, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1,
+                        highlightbackground=COLORES['border'], highlightthickness=1)
         frame.pack(fill=tk.X, pady=8, padx=5)
         
         frame_header = tk.Frame(frame, bg=COLORES['primary'], height=40)
@@ -2773,7 +2866,7 @@ class GestorGastos:
         """Crea widget visual para una tarjeta"""
         id_t, nombre, banco, limite, cierre, venc = tarjeta[:6]
         
-        frame = tk.Frame(self.frame_tarjetas, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+        frame = tk.Frame(self.frame_tarjetas, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
         frame.pack(fill=tk.X, pady=8, padx=5)
         
         frame_header = tk.Frame(frame, bg=COLORES['info'], height=40)
@@ -2947,7 +3040,7 @@ class GestorGastos:
         """Crea widget para transacción recurrente"""
         id_rec, nombre, cat, monto, moneda, cuenta, freq, dia = rec[:8]
 
-        frame = tk.Frame(parent, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+        frame = tk.Frame(parent, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
         frame.pack(fill=tk.X, pady=8, padx=5)
 
         frame_header = tk.Frame(frame, bg=COLORES['secondary'], height=40)
@@ -3126,7 +3219,7 @@ class GestorGastos:
         pct = (gasto_actual / limite * 100) if limite > 0 else 0
         color_barra = COLORES['success'] if pct < 80 else COLORES['warning'] if pct < 100 else COLORES['danger']
 
-        frame = tk.Frame(parent, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+        frame = tk.Frame(parent, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
         frame.pack(fill=tk.X, pady=8, padx=5)
 
         frame_header = tk.Frame(frame, bg=COLORES['info'], height=40)
@@ -3278,7 +3371,7 @@ class GestorGastos:
                 'info': COLORES['info']
             }.get(nivel, COLORES['info'])
 
-            frame = tk.Frame(frame_lista, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+            frame = tk.Frame(frame_lista, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
             frame.pack(fill=tk.X, pady=5, padx=5)
 
             if not leida:
@@ -3350,7 +3443,7 @@ class GestorGastos:
         for cuenta in cuentas:
             id_c, nombre, cat, monto, moneda, dia_venc = cuenta[:6]
 
-            frame = tk.Frame(frame_lista, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+            frame = tk.Frame(frame_lista, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
             frame.pack(fill=tk.X, pady=5, padx=5)
 
             dias_faltantes = dia_venc - hoy.day
@@ -3523,7 +3616,7 @@ class GestorGastos:
         for deuda in deudas:
             id_d, nombre, total, pagado, con_quien, tipo = deuda[:6]
 
-            frame = tk.Frame(frame_lista, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+            frame = tk.Frame(frame_lista, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
             frame.pack(fill=tk.X, pady=5, padx=5)
 
             pct = (pagado / total * 100) if total > 0 else 0
@@ -3690,7 +3783,7 @@ class GestorGastos:
         for logro in logros:
             id_l, nombre, desc, icono, desbloqueado, fecha_desb, progreso, objetivo = logro
 
-            frame = tk.Frame(frame_lista, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+            frame = tk.Frame(frame_lista, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
             frame.pack(fill=tk.X, pady=5, padx=5)
 
             if desbloqueado:
@@ -3810,7 +3903,7 @@ class GestorGastos:
         for regla in reglas:
             id_r, nombre, tipo_trigger, condicion, accion, parametros, activa, ultima_ejecucion = regla
 
-            frame = tk.Frame(frame_lista, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+            frame = tk.Frame(frame_lista, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
             frame.pack(fill=tk.X, pady=5, padx=5)
 
             # Color según estado
@@ -4088,7 +4181,7 @@ class GestorGastos:
         for zona in zonas:
             id_z, nombre, lat, lon, radio, cat_sugerida, cuenta_sugerida, activa = zona
 
-            frame = tk.Frame(frame_lista, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+            frame = tk.Frame(frame_lista, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
             frame.pack(fill=tk.X, pady=5, padx=5)
 
             color = COLORES['info'] if activa else COLORES['text_secondary']
@@ -4342,7 +4435,7 @@ class GestorGastos:
         for regla in reglas:
             id_r, nombre, tipo, activa, modo, meta_id, ultima_ej, monto_total, config = regla
 
-            frame = tk.Frame(frame_lista, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+            frame = tk.Frame(frame_lista, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
             frame.pack(fill=tk.X, pady=5, padx=5)
 
             # Color según estado
@@ -4662,7 +4755,7 @@ class GestorGastos:
         for susc in suscripciones:
             id_s, nombre, cat, monto, moneda, freq, dia_cobro, fecha_inicio, prox_cobro, activa = susc[:10]
 
-            frame = tk.Frame(frame_lista, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+            frame = tk.Frame(frame_lista, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
             frame.pack(fill=tk.X, pady=5, padx=5)
 
             # Verificar si es suscripción no usada
@@ -4928,7 +5021,7 @@ class GestorGastos:
             ]
 
             for titulo, valor, peso, color in componentes:
-                frame_comp = tk.Frame(frame_componentes, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+                frame_comp = tk.Frame(frame_componentes, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
                 frame_comp.pack(fill=tk.X, pady=5)
 
                 frame_comp_header = tk.Frame(frame_comp, bg=color, height=30)
@@ -5073,7 +5166,7 @@ class GestorGastos:
             participantes = self.db.obtener_participantes_grupo(grupo_id)
 
             # Tarjeta del grupo
-            frame_grupo = tk.Frame(frame_grupos, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+            frame_grupo = tk.Frame(frame_grupos, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
             frame_grupo.pack(fill=tk.X, pady=8)
 
             # Header del grupo
@@ -5293,7 +5386,7 @@ class GestorGastos:
         ).pack(pady=10)
 
         # Formulario para agregar participante
-        frame_form = tk.Frame(frame, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+        frame_form = tk.Frame(frame, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
         frame_form.pack(fill=tk.X, pady=10)
 
         tk.Label(
@@ -5595,7 +5688,7 @@ class GestorGastos:
             scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
             for i, (deudor, acreedor, monto) in enumerate(transacciones, 1):
-                frame_t = tk.Frame(frame_trans, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+                frame_t = tk.Frame(frame_trans, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
                 frame_t.pack(fill=tk.X, pady=5)
 
                 # Número de transacción
@@ -5749,7 +5842,7 @@ class GestorGastos:
                 fecha = gasto[5]
                 categoria = gasto[6] if gasto[6] else ''
 
-                frame_g = tk.Frame(frame_gastos, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+                frame_g = tk.Frame(frame_gastos, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
                 frame_g.pack(fill=tk.X, pady=5)
 
                 # Header del gasto
@@ -5906,7 +5999,7 @@ class GestorGastos:
                 color_header = COLORES['primary']
 
             # Tarjeta del presupuesto
-            frame_presup = tk.Frame(frame_presups, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+            frame_presup = tk.Frame(frame_presups, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
             frame_presup.pack(fill=tk.X, pady=8)
 
             # Header
@@ -6161,7 +6254,7 @@ class GestorGastos:
         ).pack(pady=10)
 
         # Formulario para agregar
-        frame_form = tk.Frame(frame, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+        frame_form = tk.Frame(frame, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
         frame_form.pack(fill=tk.X, pady=10)
 
         tk.Label(
@@ -6576,7 +6669,7 @@ class GestorGastos:
             fg=COLORES['text_secondary']
         ).pack()
         
-        frame_conv = tk.Frame(frame, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+        frame_conv = tk.Frame(frame, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
         frame_conv.pack(fill=tk.BOTH, expand=True, pady=20)
         
         # DE
@@ -6761,7 +6854,7 @@ class GestorGastos:
         btn_mic.pack(side=tk.RIGHT, padx=(5, 0))
 
         # Frame de vista previa
-        frame_preview = tk.Frame(frame, bg=COLORES['card_bg'], relief=tk.RAISED, bd=2)
+        frame_preview = tk.Frame(frame, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
         frame_preview.pack(fill=tk.BOTH, expand=True, pady=15)
 
         tk.Label(
