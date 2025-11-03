@@ -2295,7 +2295,7 @@ class GestorGastos:
             fg='white',
             relief=tk.FLAT,
             cursor='hand2',
-            command=self.ventana_entrada_rapida_monefy,
+            command=self.ventana_registro_rapido,
             pady=15
         ).pack(fill=tk.X, padx=15, pady=(10, 10))
 
@@ -5445,38 +5445,57 @@ class GestorGastos:
         """Ventana para crear un nuevo grupo de Splitwise"""
         v = tk.Toplevel(self.root)
         v.title("➕ Nuevo Grupo Splitwise")
-        v.geometry("450x400")
+        v.geometry("550x500")
         v.configure(bg=COLORES['background'])
         v.transient(self.root)
         v.grab_set()
 
         v.update_idletasks()
-        x = (v.winfo_screenwidth() // 2) - (450 // 2)
-        y = (v.winfo_screenheight() // 2) - (400 // 2)
-        v.geometry(f'450x400+{x}+{y}')
+        x = (v.winfo_screenwidth() // 2) - (550 // 2)
+        y = (v.winfo_screenheight() // 2) - (500 // 2)
+        v.geometry(f'550x500+{x}+{y}')
 
-        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame = tk.Frame(v, bg=COLORES['background'], padx=25, pady=25)
         frame.pack(fill=tk.BOTH, expand=True)
 
-        tk.Label(frame, text="📝 Nombre del grupo:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
-        entry_nombre = tk.Entry(frame, font=('Segoe UI', 11))
-        entry_nombre.pack(fill=tk.X, pady=3)
+        # Header moderno
+        header_frame = tk.Frame(frame, bg=COLORES['primary'], relief=tk.FLAT)
+        header_frame.pack(fill=tk.X, pady=(0, 20), padx=-5)
 
-        tk.Label(frame, text="📄 Descripción (opcional):", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
-        entry_desc = tk.Entry(frame, font=('Segoe UI', 11))
-        entry_desc.pack(fill=tk.X, pady=3)
+        tk.Label(
+            header_frame,
+            text="➕ Nuevo Grupo Splitwise",
+            font=('Segoe UI', 16, 'bold'),
+            bg=COLORES['primary'],
+            fg='white'
+        ).pack(pady=15)
 
-        tk.Label(frame, text="🎨 Icono:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        # Form moderno
+        form_frame = tk.Frame(frame, bg=COLORES['card_bg'], relief=tk.FLAT, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
+        form_frame.pack(fill=tk.BOTH, expand=True, pady=10, padx=5, ipady=15)
+
+        form_inner = tk.Frame(form_frame, bg=COLORES['card_bg'])
+        form_inner.pack(fill=tk.BOTH, expand=True, padx=20, pady=15)
+
+        tk.Label(form_inner, text="📝 Nombre del grupo:", bg=COLORES['card_bg'], font=('Segoe UI', 11, 'bold'), fg=COLORES['text']).pack(anchor='w', pady=(5,3))
+        entry_nombre = tk.Entry(form_inner, font=('Segoe UI', 12), relief=tk.FLAT, bg=COLORES['light'], fg=COLORES['text'])
+        entry_nombre.pack(fill=tk.X, pady=(0,15), ipady=8)
+
+        tk.Label(form_inner, text="📄 Descripción (opcional):", bg=COLORES['card_bg'], font=('Segoe UI', 11, 'bold'), fg=COLORES['text']).pack(anchor='w', pady=(5,3))
+        entry_desc = tk.Entry(form_inner, font=('Segoe UI', 12), relief=tk.FLAT, bg=COLORES['light'], fg=COLORES['text'])
+        entry_desc.pack(fill=tk.X, pady=(0,15), ipady=8)
+
+        tk.Label(form_inner, text="🎨 Icono:", bg=COLORES['card_bg'], font=('Segoe UI', 11, 'bold'), fg=COLORES['text']).pack(anchor='w', pady=(5,3))
         iconos = ['👥', '🏠', '✈️', '🍕', '🎉', '🏖️', '⚽', '🎬', '🍺', '💼']
-        combo_icono = ttk.Combobox(frame, values=iconos, state='readonly', font=('Segoe UI', 11))
+        combo_icono = ttk.Combobox(form_inner, values=iconos, state='readonly', font=('Segoe UI', 12))
         combo_icono.set('👥')
-        combo_icono.pack(fill=tk.X, pady=3)
+        combo_icono.pack(fill=tk.X, pady=(0,15), ipady=5)
 
-        tk.Label(frame, text="👥 Tipo:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        tk.Label(form_inner, text="👥 Tipo:", bg=COLORES['card_bg'], font=('Segoe UI', 11, 'bold'), fg=COLORES['text']).pack(anchor='w', pady=(5,3))
         tipos = ['general', 'viaje', 'casa', 'pareja', 'evento']
-        combo_tipo = ttk.Combobox(frame, values=tipos, state='readonly', font=('Segoe UI', 11))
+        combo_tipo = ttk.Combobox(form_inner, values=tipos, state='readonly', font=('Segoe UI', 12))
         combo_tipo.set('general')
-        combo_tipo.pack(fill=tk.X, pady=3)
+        combo_tipo.pack(fill=tk.X, pady=(0,10), ipady=5)
 
         def guardar():
             nombre = entry_nombre.get().strip()
@@ -5506,48 +5525,56 @@ class GestorGastos:
             command=guardar,
             bg=COLORES['success'],
             fg='white',
-            font=('Segoe UI', 11, 'bold'),
+            font=('Segoe UI', 12, 'bold'),
             relief=tk.FLAT,
             cursor='hand2',
-            padx=25,
-            pady=10
-        ).pack(side=tk.LEFT, padx=5)
+            padx=40,
+            pady=12,
+            borderwidth=0
+        ).pack(side=tk.LEFT, padx=8)
 
         tk.Button(
             frame_btns,
             text="❌ Cancelar",
             command=v.destroy,
-            bg=COLORES['danger'],
+            bg=COLORES['text_secondary'],
             fg='white',
-            font=('Segoe UI', 10),
+            font=('Segoe UI', 11),
             relief=tk.FLAT,
             cursor='hand2',
-            padx=25,
-            pady=10
-        ).pack(side=tk.LEFT, padx=5)
+            padx=40,
+            pady=12,
+            borderwidth=0
+        ).pack(side=tk.LEFT, padx=8)
 
     def ventana_participantes_grupo(self, grupo_id):
         """Gestionar participantes de un grupo"""
         v = tk.Toplevel(self.root)
         v.title("👥 Participantes del Grupo")
-        v.geometry("500x550")
+        v.geometry("600x650")
         v.configure(bg=COLORES['background'])
         v.transient(self.root)
+        v.grab_set()
 
         v.update_idletasks()
-        x = (v.winfo_screenwidth() // 2) - (500 // 2)
-        y = (v.winfo_screenheight() // 2) - (550 // 2)
-        v.geometry(f'500x550+{x}+{y}')
+        x = (v.winfo_screenwidth() // 2) - (600 // 2)
+        y = (v.winfo_screenheight() // 2) - (650 // 2)
+        v.geometry(f'600x650+{x}+{y}')
 
-        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame = tk.Frame(v, bg=COLORES['background'], padx=25, pady=25)
         frame.pack(fill=tk.BOTH, expand=True)
 
+        # Header moderno
+        header_frame = tk.Frame(frame, bg=COLORES['primary'], relief=tk.FLAT)
+        header_frame.pack(fill=tk.X, pady=(0, 20), padx=-5)
+
         tk.Label(
-            frame,
-            text="👥 Participantes",
+            header_frame,
+            text="👥 Participantes del Grupo",
             font=('Segoe UI', 16, 'bold'),
-            bg=COLORES['background']
-        ).pack(pady=10)
+            bg=COLORES['primary'],
+            fg='white'
+        ).pack(pady=15)
 
         # Formulario para agregar participante
         frame_form = tk.Frame(frame, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
@@ -5666,25 +5693,30 @@ class GestorGastos:
         """Agregar un gasto compartido al grupo"""
         v = tk.Toplevel(self.root)
         v.title("➕ Agregar Gasto Compartido")
-        v.geometry("550x600")
+        v.geometry("650x700")
         v.configure(bg=COLORES['background'])
         v.transient(self.root)
         v.grab_set()
 
         v.update_idletasks()
-        x = (v.winfo_screenwidth() // 2) - (550 // 2)
-        y = (v.winfo_screenheight() // 2) - (600 // 2)
-        v.geometry(f'550x600+{x}+{y}')
+        x = (v.winfo_screenwidth() // 2) - (650 // 2)
+        y = (v.winfo_screenheight() // 2) - (700 // 2)
+        v.geometry(f'650x700+{x}+{y}')
 
-        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame = tk.Frame(v, bg=COLORES['background'], padx=25, pady=25)
         frame.pack(fill=tk.BOTH, expand=True)
 
+        # Header moderno
+        header_frame = tk.Frame(frame, bg=COLORES['primary'], relief=tk.FLAT)
+        header_frame.pack(fill=tk.X, pady=(0, 20), padx=-5)
+
         tk.Label(
-            frame,
+            header_frame,
             text="➕ Nuevo Gasto Compartido",
             font=('Segoe UI', 16, 'bold'),
-            bg=COLORES['background']
-        ).pack(pady=10)
+            bg=COLORES['primary'],
+            fg='white'
+        ).pack(pady=15)
 
         # Obtener participantes
         participantes = self.db.obtener_participantes_grupo(grupo_id)
@@ -5695,34 +5727,40 @@ class GestorGastos:
 
         nombres_participantes = [p[2] for p in participantes]
 
-        # Formulario
-        tk.Label(frame, text="📝 Descripción:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
-        entry_desc = tk.Entry(frame, font=('Segoe UI', 11))
-        entry_desc.pack(fill=tk.X, pady=3)
+        # Formulario con diseño moderno
+        form_frame = tk.Frame(frame, bg=COLORES['card_bg'], relief=tk.FLAT, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
+        form_frame.pack(fill=tk.BOTH, expand=True, pady=10, padx=5, ipady=15)
 
-        tk.Label(frame, text="💰 Monto total:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
-        entry_monto = tk.Entry(frame, font=('Segoe UI', 11))
-        entry_monto.pack(fill=tk.X, pady=3)
+        form_inner = tk.Frame(form_frame, bg=COLORES['card_bg'])
+        form_inner.pack(fill=tk.BOTH, expand=True, padx=20, pady=15)
 
-        tk.Label(frame, text="💳 Pagado por:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
-        combo_pagador = ttk.Combobox(frame, values=nombres_participantes, state='readonly', font=('Segoe UI', 11))
+        tk.Label(form_inner, text="📝 Descripción:", bg=COLORES['card_bg'], font=('Segoe UI', 11, 'bold'), fg=COLORES['text']).pack(anchor='w', pady=(5,3))
+        entry_desc = tk.Entry(form_inner, font=('Segoe UI', 12), relief=tk.FLAT, bg=COLORES['light'], fg=COLORES['text'])
+        entry_desc.pack(fill=tk.X, pady=(0,10), ipady=8)
+
+        tk.Label(form_inner, text="💰 Monto total:", bg=COLORES['card_bg'], font=('Segoe UI', 11, 'bold'), fg=COLORES['text']).pack(anchor='w', pady=(5,3))
+        entry_monto = tk.Entry(form_inner, font=('Segoe UI', 12), relief=tk.FLAT, bg=COLORES['light'], fg=COLORES['text'])
+        entry_monto.pack(fill=tk.X, pady=(0,10), ipady=8)
+
+        tk.Label(form_inner, text="💳 Pagado por:", bg=COLORES['card_bg'], font=('Segoe UI', 11, 'bold'), fg=COLORES['text']).pack(anchor='w', pady=(5,3))
+        combo_pagador = ttk.Combobox(form_inner, values=nombres_participantes, state='readonly', font=('Segoe UI', 12))
         if nombres_participantes:
             combo_pagador.set(nombres_participantes[0])
-        combo_pagador.pack(fill=tk.X, pady=3)
+        combo_pagador.pack(fill=tk.X, pady=(0,10), ipady=5)
 
-        tk.Label(frame, text="📂 Categoría (opcional):", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
-        entry_categoria = tk.Entry(frame, font=('Segoe UI', 11))
-        entry_categoria.pack(fill=tk.X, pady=3)
+        tk.Label(form_inner, text="📂 Categoría (opcional):", bg=COLORES['card_bg'], font=('Segoe UI', 11, 'bold'), fg=COLORES['text']).pack(anchor='w', pady=(5,3))
+        entry_categoria = tk.Entry(form_inner, font=('Segoe UI', 12), relief=tk.FLAT, bg=COLORES['light'], fg=COLORES['text'])
+        entry_categoria.pack(fill=tk.X, pady=(0,10), ipady=8)
 
-        tk.Label(frame, text="🔀 Método de división:", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
+        tk.Label(form_inner, text="🔀 Método de división:", bg=COLORES['card_bg'], font=('Segoe UI', 11, 'bold'), fg=COLORES['text']).pack(anchor='w', pady=(5,3))
         metodos = ['equitativa', 'porcentajes', 'montos', 'partes']
-        combo_metodo = ttk.Combobox(frame, values=metodos, state='readonly', font=('Segoe UI', 11))
+        combo_metodo = ttk.Combobox(form_inner, values=metodos, state='readonly', font=('Segoe UI', 12))
         combo_metodo.set('equitativa')
-        combo_metodo.pack(fill=tk.X, pady=3)
+        combo_metodo.pack(fill=tk.X, pady=(0,10), ipady=5)
 
-        tk.Label(frame, text="📋 Notas (opcional):", bg=COLORES['background'], font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=3)
-        entry_notas = tk.Entry(frame, font=('Segoe UI', 11))
-        entry_notas.pack(fill=tk.X, pady=3)
+        tk.Label(form_inner, text="📋 Notas (opcional):", bg=COLORES['card_bg'], font=('Segoe UI', 11, 'bold'), fg=COLORES['text']).pack(anchor='w', pady=(5,3))
+        entry_notas = tk.Entry(form_inner, font=('Segoe UI', 12), relief=tk.FLAT, bg=COLORES['light'], fg=COLORES['text'])
+        entry_notas.pack(fill=tk.X, pady=(0,10), ipady=8)
 
         def guardar():
             descripcion = entry_desc.get().strip()
@@ -5768,48 +5806,56 @@ class GestorGastos:
             command=guardar,
             bg=COLORES['success'],
             fg='white',
-            font=('Segoe UI', 11, 'bold'),
+            font=('Segoe UI', 12, 'bold'),
             relief=tk.FLAT,
             cursor='hand2',
-            padx=25,
-            pady=10
-        ).pack(side=tk.LEFT, padx=5)
+            padx=40,
+            pady=12,
+            borderwidth=0
+        ).pack(side=tk.LEFT, padx=8)
 
         tk.Button(
             frame_btns,
             text="❌ Cancelar",
             command=v.destroy,
-            bg=COLORES['danger'],
+            bg=COLORES['text_secondary'],
             fg='white',
-            font=('Segoe UI', 10),
+            font=('Segoe UI', 11),
             relief=tk.FLAT,
             cursor='hand2',
-            padx=25,
-            pady=10
-        ).pack(side=tk.LEFT, padx=5)
+            padx=40,
+            pady=12,
+            borderwidth=0
+        ).pack(side=tk.LEFT, padx=8)
 
     def ventana_settle_up(self, grupo_id):
         """Ventana para saldar deudas del grupo"""
         v = tk.Toplevel(self.root)
         v.title("💰 Settle Up - Saldar Cuentas")
-        v.geometry("600x650")
+        v.geometry("700x750")
         v.configure(bg=COLORES['background'])
         v.transient(self.root)
+        v.grab_set()
 
         v.update_idletasks()
-        x = (v.winfo_screenwidth() // 2) - (600 // 2)
-        y = (v.winfo_screenheight() // 2) - (650 // 2)
-        v.geometry(f'600x650+{x}+{y}')
+        x = (v.winfo_screenwidth() // 2) - (700 // 2)
+        y = (v.winfo_screenheight() // 2) - (750 // 2)
+        v.geometry(f'700x750+{x}+{y}')
 
-        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame = tk.Frame(v, bg=COLORES['background'], padx=25, pady=25)
         frame.pack(fill=tk.BOTH, expand=True)
 
+        # Header moderno
+        header_frame = tk.Frame(frame, bg=COLORES['primary'], relief=tk.FLAT)
+        header_frame.pack(fill=tk.X, pady=(0, 20), padx=-5)
+
         tk.Label(
-            frame,
-            text="💰 Settle Up - Cómo Saldar Cuentas",
+            header_frame,
+            text="💰 Settle Up - Saldar Cuentas",
             font=('Segoe UI', 16, 'bold'),
-            bg=COLORES['background']
-        ).pack(pady=10)
+            bg=COLORES['primary'],
+            fg='white'
+        ).pack(pady=15)
 
         # Mostrar deudas simplificadas
         transacciones = self.db.simplificar_deudas_grupo(grupo_id)
@@ -5836,7 +5882,7 @@ class GestorGastos:
             frame_scroll = tk.Frame(frame, bg=COLORES['background'])
             frame_scroll.pack(fill=tk.BOTH, expand=True, pady=10)
 
-            canvas = tk.Canvas(frame_scroll, bg=COLORES['background'], highlightthickness=0, height=300)
+            canvas = tk.Canvas(frame_scroll, bg=COLORES['background'], highlightthickness=0, height=400)
             scrollbar = tk.Scrollbar(frame_scroll, orient="vertical", command=canvas.yview)
             frame_trans = tk.Frame(canvas, bg=COLORES['background'])
 
@@ -5852,8 +5898,8 @@ class GestorGastos:
             scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
             for i, (deudor, acreedor, monto) in enumerate(transacciones, 1):
-                frame_t = tk.Frame(frame_trans, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
-                frame_t.pack(fill=tk.X, pady=5)
+                frame_t = tk.Frame(frame_trans, bg=COLORES['card_bg'], relief=tk.FLAT, bd=2, highlightbackground=COLORES['border'], highlightthickness=1)
+                frame_t.pack(fill=tk.X, pady=8, padx=5, ipady=5)
 
                 # Número de transacción
                 tk.Label(
@@ -5932,27 +5978,29 @@ class GestorGastos:
             command=v.destroy,
             bg=COLORES['primary'],
             fg='white',
-            font=('Segoe UI', 11, 'bold'),
+            font=('Segoe UI', 12, 'bold'),
             relief=tk.FLAT,
             cursor='hand2',
-            padx=30,
-            pady=10
-        ).pack(pady=10)
+            padx=50,
+            pady=12,
+            borderwidth=0
+        ).pack(pady=15)
 
     def ventana_ver_gastos_grupo(self, grupo_id):
         """Ver todos los gastos de un grupo"""
         v = tk.Toplevel(self.root)
         v.title("📋 Gastos del Grupo")
-        v.geometry("700x600")
+        v.geometry("800x700")
         v.configure(bg=COLORES['background'])
         v.transient(self.root)
+        v.grab_set()
 
         v.update_idletasks()
-        x = (v.winfo_screenwidth() // 2) - (700 // 2)
-        y = (v.winfo_screenheight() // 2) - (600 // 2)
-        v.geometry(f'700x600+{x}+{y}')
+        x = (v.winfo_screenwidth() // 2) - (800 // 2)
+        y = (v.winfo_screenheight() // 2) - (700 // 2)
+        v.geometry(f'800x700+{x}+{y}')
 
-        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame = tk.Frame(v, bg=COLORES['background'], padx=25, pady=25)
         frame.pack(fill=tk.BOTH, expand=True)
 
         # Obtener nombre del grupo
@@ -5961,12 +6009,17 @@ class GestorGastos:
         grupo_info = cursor.fetchone()
         nombre_grupo = grupo_info[0] if grupo_info else "Grupo"
 
+        # Header moderno
+        header_frame = tk.Frame(frame, bg=COLORES['primary'], relief=tk.FLAT)
+        header_frame.pack(fill=tk.X, pady=(0, 20), padx=-5)
+
         tk.Label(
-            frame,
+            header_frame,
             text=f"📋 Gastos de: {nombre_grupo}",
             font=('Segoe UI', 16, 'bold'),
-            bg=COLORES['background']
-        ).pack(pady=10)
+            bg=COLORES['primary'],
+            fg='white'
+        ).pack(pady=15)
 
         # Obtener gastos
         gastos = self.db.obtener_gastos_grupo(grupo_id)
@@ -6385,14 +6438,15 @@ class GestorGastos:
             frame_btns,
             text="❌ Cancelar",
             command=v.destroy,
-            bg=COLORES['danger'],
+            bg=COLORES['text_secondary'],
             fg='white',
-            font=('Segoe UI', 10),
+            font=('Segoe UI', 11),
             relief=tk.FLAT,
             cursor='hand2',
-            padx=25,
-            pady=10
-        ).pack(side=tk.LEFT, padx=5)
+            padx=40,
+            pady=12,
+            borderwidth=0
+        ).pack(side=tk.LEFT, padx=8)
 
     def ventana_participantes_presupuesto(self, presup_id):
         """Gestionar participantes de un presupuesto compartido"""
@@ -6927,45 +6981,57 @@ class GestorGastos:
         """Ventana de registro rápido con texto libre"""
         v = tk.Toplevel(self.root)
         v.title("⚡ Registro Rápido de Gasto")
-        v.geometry("550x500")
+        v.geometry("600x550")
         v.configure(bg=COLORES['background'])
         v.transient(self.root)
         v.grab_set()
 
         v.update_idletasks()
-        x = (v.winfo_screenwidth() // 2) - (550 // 2)
-        y = (v.winfo_screenheight() // 2) - (500 // 2)
-        v.geometry(f'550x500+{x}+{y}')
+        x = (v.winfo_screenwidth() // 2) - (600 // 2)
+        y = (v.winfo_screenheight() // 2) - (550 // 2)
+        v.geometry(f'600x550+{x}+{y}')
 
-        frame = tk.Frame(v, bg=COLORES['background'], padx=20, pady=20)
+        frame = tk.Frame(v, bg=COLORES['background'], padx=25, pady=25)
         frame.pack(fill=tk.BOTH, expand=True)
 
+        # Header con gradiente visual (simulado con frame)
+        header_frame = tk.Frame(frame, bg=COLORES['primary'], relief=tk.FLAT)
+        header_frame.pack(fill=tk.X, pady=(0, 20), padx=-5)
+
         tk.Label(
-            frame,
-            text="⚡ Registro Rápido - Escribí tu gasto en lenguaje natural",
-            font=('Segoe UI', 12, 'bold'),
-            bg=COLORES['background']
-        ).pack(pady=(0, 10))
+            header_frame,
+            text="⚡ Registro Rápido",
+            font=('Segoe UI', 16, 'bold'),
+            bg=COLORES['primary'],
+            fg='white'
+        ).pack(pady=15)
 
         tk.Label(
             frame,
-            text='Ejemplos:\n"Gasto 2000 en supermercado"\n"Pagué 1500 de comida"\n"Almuerzo $350"\n"500 pesos en café"',
+            text='💬 Escribí tu gasto en lenguaje natural o usá el micrófono',
+            font=('Segoe UI', 11, 'bold'),
+            bg=COLORES['background'],
+            fg=COLORES['text']
+        ).pack(pady=(0, 5))
+
+        tk.Label(
+            frame,
+            text='Ejemplos: "Gasto 2000 en supermercado" • "Pagué 1500 de comida" • "Almuerzo $350"',
             font=('Segoe UI', 9),
             bg=COLORES['background'],
             fg=COLORES['text_secondary'],
-            justify=tk.LEFT
+            justify=tk.CENTER
         ).pack(pady=(0, 15))
 
-        # Campo de texto libre con micrófono
-        tk.Label(frame, text="💬 Describe tu gasto:", font=('Segoe UI', 10, 'bold'),
-                bg=COLORES['background']).pack(anchor='w', pady=3)
+        # Frame para entry + botón de micrófono con estilo moderno
+        frame_input_container = tk.Frame(frame, bg=COLORES['card_bg'], relief=tk.FLAT, bd=2, highlightbackground=COLORES['primary_light'], highlightthickness=2)
+        frame_input_container.pack(fill=tk.X, pady=10, ipady=5)
 
-        # Frame para entry + botón de micrófono
-        frame_input = tk.Frame(frame, bg=COLORES['background'])
-        frame_input.pack(fill=tk.X, pady=5)
+        frame_input = tk.Frame(frame_input_container, bg=COLORES['card_bg'])
+        frame_input.pack(fill=tk.X, padx=5, pady=5)
 
-        entry_texto = tk.Entry(frame_input, font=('Segoe UI', 12))
-        entry_texto.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=5)
+        entry_texto = tk.Entry(frame_input, font=('Segoe UI', 13), relief=tk.FLAT, bg=COLORES['card_bg'], fg=COLORES['text'], insertbackground=COLORES['primary'])
+        entry_texto.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=8, padx=5)
         entry_texto.focus()
 
         # Botón de micrófono
@@ -7009,43 +7075,45 @@ class GestorGastos:
         btn_mic = tk.Button(
             frame_input,
             text="🎤",
-            font=('Segoe UI', 14, 'bold'),
+            font=('Segoe UI', 16, 'bold'),
             bg=COLORES['info'],
             fg='white',
             relief=tk.FLAT,
             cursor='hand2',
             command=iniciar_voz,
-            padx=12,
-            pady=5
+            padx=15,
+            pady=8,
+            borderwidth=0
         )
-        btn_mic.pack(side=tk.RIGHT, padx=(5, 0))
+        btn_mic.pack(side=tk.RIGHT, padx=5)
 
-        # Frame de vista previa
-        frame_preview = tk.Frame(frame, bg=COLORES['card_bg'], relief=tk.SOLID, bd=1, highlightbackground=COLORES['border'], highlightthickness=1)
-        frame_preview.pack(fill=tk.BOTH, expand=True, pady=15)
+        # Frame de vista previa con diseño moderno
+        frame_preview = tk.Frame(frame, bg=COLORES['card_bg'], relief=tk.FLAT, bd=2, highlightbackground=COLORES['border'], highlightthickness=1)
+        frame_preview.pack(fill=tk.BOTH, expand=True, pady=15, ipady=10)
 
         tk.Label(
             frame_preview,
-            text="📝 Vista Previa",
-            font=('Segoe UI', 10, 'bold'),
-            bg=COLORES['card_bg']
-        ).pack(pady=10)
+            text="📝 Vista Previa del Gasto",
+            font=('Segoe UI', 12, 'bold'),
+            bg=COLORES['card_bg'],
+            fg=COLORES['primary']
+        ).pack(pady=15)
 
-        lbl_monto = tk.Label(frame_preview, text="💰 Monto: -", font=('Segoe UI', 10),
-                            bg=COLORES['card_bg'], anchor='w')
-        lbl_monto.pack(fill=tk.X, padx=15, pady=3)
+        lbl_monto = tk.Label(frame_preview, text="💰 Monto: -", font=('Segoe UI', 12, 'bold'),
+                            bg=COLORES['card_bg'], anchor='w', fg=COLORES['text'])
+        lbl_monto.pack(fill=tk.X, padx=20, pady=8)
 
-        lbl_categoria = tk.Label(frame_preview, text="📂 Categoría: -", font=('Segoe UI', 10),
-                                bg=COLORES['card_bg'], anchor='w')
-        lbl_categoria.pack(fill=tk.X, padx=15, pady=3)
+        lbl_categoria = tk.Label(frame_preview, text="📂 Categoría: -", font=('Segoe UI', 11),
+                                bg=COLORES['card_bg'], anchor='w', fg=COLORES['text'])
+        lbl_categoria.pack(fill=tk.X, padx=20, pady=8)
 
-        lbl_descripcion = tk.Label(frame_preview, text="📝 Descripción: -", font=('Segoe UI', 10),
-                                   bg=COLORES['card_bg'], anchor='w')
-        lbl_descripcion.pack(fill=tk.X, padx=15, pady=3)
+        lbl_descripcion = tk.Label(frame_preview, text="📝 Descripción: -", font=('Segoe UI', 11),
+                                   bg=COLORES['card_bg'], anchor='w', fg=COLORES['text'])
+        lbl_descripcion.pack(fill=tk.X, padx=20, pady=8)
 
-        lbl_confianza = tk.Label(frame_preview, text="", font=('Segoe UI', 9),
+        lbl_confianza = tk.Label(frame_preview, text="", font=('Segoe UI', 10, 'bold'),
                                 bg=COLORES['card_bg'], fg=COLORES['text_secondary'])
-        lbl_confianza.pack(pady=5)
+        lbl_confianza.pack(pady=10)
 
         datos_parseados = {'monto': 0, 'categoria': None, 'descripcion': ''}
 
@@ -7111,15 +7179,15 @@ class GestorGastos:
                 messagebox.showerror("Error", f"Error al guardar: {e}")
 
         frame_btns = tk.Frame(frame, bg=COLORES['background'])
-        frame_btns.pack(pady=10)
+        frame_btns.pack(pady=15)
 
-        tk.Button(frame_btns, text="💾 Guardar", command=guardar, bg=COLORES['success'],
-                 fg='white', font=('Segoe UI', 11, 'bold'), relief=tk.FLAT, cursor='hand2',
-                 padx=30, pady=10).pack(side=tk.LEFT, padx=5)
+        tk.Button(frame_btns, text="💾 Guardar Gasto", command=guardar, bg=COLORES['success'],
+                 fg='white', font=('Segoe UI', 12, 'bold'), relief=tk.FLAT, cursor='hand2',
+                 padx=40, pady=12, borderwidth=0).pack(side=tk.LEFT, padx=8)
 
-        tk.Button(frame_btns, text="❌ Cancelar", command=v.destroy, bg=COLORES['danger'],
-                 fg='white', font=('Segoe UI', 10), relief=tk.FLAT, cursor='hand2',
-                 padx=30, pady=10).pack(side=tk.LEFT, padx=5)
+        tk.Button(frame_btns, text="❌ Cancelar", command=v.destroy, bg=COLORES['text_secondary'],
+                 fg='white', font=('Segoe UI', 11), relief=tk.FLAT, cursor='hand2',
+                 padx=40, pady=12, borderwidth=0).pack(side=tk.LEFT, padx=8)
 
     def ventana_entrada_rapida_monefy(self):
         """Entrada ultra-rápida estilo Monefy con calculadora"""
