@@ -4043,9 +4043,14 @@ class GestorGastos:
         scrollbar = tk.Scrollbar(self.frame_contenido, orient="vertical", command=canvas.yview)
 
         frame_lista = tk.Frame(canvas, bg=COLORES['background'])
-        frame_lista.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
 
-        canvas.create_window((0, 0), window=frame_lista, anchor="nw", width=1100)
+        def configurar_scroll(e):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            canvas.itemconfig(window_id, width=e.width)
+
+        frame_lista.bind("<Configure>", configurar_scroll)
+
+        window_id = canvas.create_window((0, 0), window=frame_lista, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
 
         canvas.pack(side="left", fill="both", expand=True, padx=15)
@@ -4319,9 +4324,14 @@ class GestorGastos:
         scrollbar = tk.Scrollbar(self.frame_contenido, orient="vertical", command=canvas.yview)
 
         frame_lista = tk.Frame(canvas, bg=COLORES['background'])
-        frame_lista.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
 
-        canvas.create_window((0, 0), window=frame_lista, anchor="nw", width=1100)
+        def configurar_scroll_geo(e):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            canvas.itemconfig(window_id_geo, width=e.width)
+
+        frame_lista.bind("<Configure>", configurar_scroll_geo)
+
+        window_id_geo = canvas.create_window((0, 0), window=frame_lista, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
 
         canvas.pack(side="left", fill="both", expand=True, padx=15)
@@ -5460,7 +5470,7 @@ class GestorGastos:
 
         # Header moderno
         header_frame = tk.Frame(frame, bg=COLORES['primary'], relief=tk.FLAT)
-        header_frame.pack(fill=tk.X, pady=(0, 20), padx=-5)
+        header_frame.pack(fill=tk.X, pady=(0, 20))
 
         tk.Label(
             header_frame,
@@ -5566,7 +5576,7 @@ class GestorGastos:
 
         # Header moderno
         header_frame = tk.Frame(frame, bg=COLORES['primary'], relief=tk.FLAT)
-        header_frame.pack(fill=tk.X, pady=(0, 20), padx=-5)
+        header_frame.pack(fill=tk.X, pady=(0, 20))
 
         tk.Label(
             header_frame,
@@ -5708,7 +5718,7 @@ class GestorGastos:
 
         # Header moderno
         header_frame = tk.Frame(frame, bg=COLORES['primary'], relief=tk.FLAT)
-        header_frame.pack(fill=tk.X, pady=(0, 20), padx=-5)
+        header_frame.pack(fill=tk.X, pady=(0, 20))
 
         tk.Label(
             header_frame,
@@ -5847,7 +5857,7 @@ class GestorGastos:
 
         # Header moderno
         header_frame = tk.Frame(frame, bg=COLORES['primary'], relief=tk.FLAT)
-        header_frame.pack(fill=tk.X, pady=(0, 20), padx=-5)
+        header_frame.pack(fill=tk.X, pady=(0, 20))
 
         tk.Label(
             header_frame,
@@ -6011,7 +6021,7 @@ class GestorGastos:
 
         # Header moderno
         header_frame = tk.Frame(frame, bg=COLORES['primary'], relief=tk.FLAT)
-        header_frame.pack(fill=tk.X, pady=(0, 20), padx=-5)
+        header_frame.pack(fill=tk.X, pady=(0, 20))
 
         tk.Label(
             header_frame,
@@ -6768,9 +6778,23 @@ class GestorGastos:
         tema_activo = self.db.obtener_tema_activo()
         tema_activo_id = tema_activo[0] if tema_activo else None
 
-        # Grid de temas
-        frame_temas = tk.Frame(self.frame_contenido, bg=COLORES['background'])
-        frame_temas.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        # Canvas con scroll para temas
+        canvas_temas = tk.Canvas(self.frame_contenido, bg=COLORES['background'], highlightthickness=0)
+        scrollbar_temas = tk.Scrollbar(self.frame_contenido, orient="vertical", command=canvas_temas.yview)
+
+        frame_temas = tk.Frame(canvas_temas, bg=COLORES['background'])
+
+        def configurar_scroll_temas(e):
+            canvas_temas.configure(scrollregion=canvas_temas.bbox("all"))
+            canvas_temas.itemconfig(window_id_temas, width=e.width)
+
+        frame_temas.bind("<Configure>", configurar_scroll_temas)
+
+        window_id_temas = canvas_temas.create_window((0, 0), window=frame_temas, anchor="nw")
+        canvas_temas.configure(yscrollcommand=scrollbar_temas.set)
+
+        canvas_temas.pack(side="left", fill="both", expand=True, padx=20, pady=10)
+        scrollbar_temas.pack(side="right", fill="y", pady=10)
 
         for i, tema in enumerate(temas):
             tema_id = tema[0]
@@ -6996,7 +7020,7 @@ class GestorGastos:
 
         # Header con gradiente visual (simulado con frame)
         header_frame = tk.Frame(frame, bg=COLORES['primary'], relief=tk.FLAT)
-        header_frame.pack(fill=tk.X, pady=(0, 20), padx=-5)
+        header_frame.pack(fill=tk.X, pady=(0, 20))
 
         tk.Label(
             header_frame,
